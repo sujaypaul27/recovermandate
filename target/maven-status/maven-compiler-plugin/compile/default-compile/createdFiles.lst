@@ -1,0 +1,11 @@
+com\recovermandate\config\WebConfig.class
+com\recovermandate\RecoverMandateApplication.class
+com\recovermandate\audit\package-info.class
+com\recovermandate\dto\HealthResponseDto.class
+com\recovermandate\webhook\package-info.class
+com\recovermandate\controller\HealthController.class
+com\recovermandate\entity\package-info.class
+com\recovermandate\service\package-info.class
+com\recovermandate\ai\package-info.class
+com\recovermandate\dto\HealthResponseDto$HealthResponseDtoBuilder.class
+com\recovermandate\repository\package-info.class
