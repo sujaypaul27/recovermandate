@@ -117,9 +117,20 @@ public class WebhookService {
 
             // Classify failure if event is payment.failed
             if ("payment.failed".equals(eventType)) {
-                com.recovermandate.entity.FailureClassification classification = failureClassificationService.classify(savedEvent);
-                if (classification != null && !classification.isAutoRecoverable()) {
-                    recoveryActionService.processFailure(classification);
+                if (subscription != null && ("halted".equalsIgnoreCase(subscription.getStatus()) || "cancelled".equalsIgnoreCase(subscription.getStatus()))) {
+                    log.info("Skipping failure classification because subscription {} is {}", subscription.getRazorpaySubscriptionId(), subscription.getStatus());
+                    auditService.log(
+                            "SUBSCRIPTION",
+                            subscription.getId(),
+                            "SUBSCRIPTION_HALTED_SKIPPED",
+                            "SYSTEM",
+                            "Skipping failure classification because subscription is " + subscription.getStatus()
+                    );
+                } else {
+                    com.recovermandate.entity.FailureClassification classification = failureClassificationService.classify(savedEvent);
+                    if (classification != null && !classification.isAutoRecoverable()) {
+                        recoveryActionService.processFailure(classification);
+                    }
                 }
             }
 
@@ -214,9 +225,18 @@ public class WebhookService {
             JsonNode paymentEntity,
             JsonNode subscriptionEntity) {
 
+        String status = !subscriptionEntity.isMissingNode() && subscriptionEntity.hasNonNull("status")
+                ? subscriptionEntity.get("status").asText()
+                : "active";
+
         Optional<Subscription> existingSub = subscriptionRepository.findByRazorpaySubscriptionId(razorpaySubscriptionId);
         if (existingSub.isPresent()) {
-            return existingSub.get();
+            Subscription sub = existingSub.get();
+            if (!status.equals(sub.getStatus())) {
+                sub.setStatus(status);
+                subscriptionRepository.save(sub);
+            }
+            return sub;
         }
 
         // Look up Merchant by razorpayAccountRef, create if not found
@@ -273,10 +293,6 @@ public class WebhookService {
                     .build();
             return planRepository.save(p);
         });
-
-        String status = !subscriptionEntity.isMissingNode() && subscriptionEntity.hasNonNull("status")
-                ? subscriptionEntity.get("status").asText()
-                : "active";
 
         Subscription newSubscription = Subscription.builder()
                 .customer(customer)

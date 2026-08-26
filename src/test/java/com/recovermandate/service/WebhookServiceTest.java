@@ -367,4 +367,61 @@ class WebhookServiceTest {
                 org.mockito.ArgumentMatchers.contains("signature verification failed")
         );
     }
+
+    @Test
+    @DisplayName("Should skip failure classification if subscription is halted")
+    void handleVerifiedEvent_subscriptionHalted_skipsClassification() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_halted_001",
+                        "amount": 49900,
+                        "subscription_id": "sub_test_halted"
+                      }
+                    },
+                    "subscription": {
+                      "entity": {
+                        "id": "sub_test_halted",
+                        "status": "halted"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_test_halted_001")).thenReturn(Optional.empty());
+        
+        Subscription sub = Subscription.builder().id(20L).razorpaySubscriptionId("sub_test_halted").status("active").build();
+        when(subscriptionRepository.findByRazorpaySubscriptionId("sub_test_halted"))
+                .thenReturn(Optional.of(sub));
+                
+        PaymentEvent savedPayment = PaymentEvent.builder()
+                .id(1L)
+                .razorpayPaymentId("pay_test_halted_001")
+                .eventType("payment.failed")
+                .subscription(sub)
+                .build();
+                
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenReturn(savedPayment);
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(result);
+        assertEquals("halted", sub.getStatus()); // Should have updated the status
+        verify(subscriptionRepository).save(sub); // Should have saved the updated sub
+        
+        verify(failureClassificationService, never()).classify(any());
+        
+        verify(auditService).log(
+                eq("SUBSCRIPTION"),
+                eq(20L),
+                eq("SUBSCRIPTION_HALTED_SKIPPED"),
+                eq("SYSTEM"),
+                org.mockito.ArgumentMatchers.contains("halted")
+        );
+    }
 }

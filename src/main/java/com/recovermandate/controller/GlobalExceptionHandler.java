@@ -41,8 +41,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationException(ConstraintViolationException ex, HttpServletRequest request) {
-        log.warn("Constraint violation: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        log.warn("Constraint violation occurred");
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation failed", request);
     }
 
     @ExceptionHandler(Exception.class)

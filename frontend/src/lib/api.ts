@@ -1,7 +1,15 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+const API_KEY = import.meta.env.VITE_API_KEY || "default-dev-key";
+
+const getHeaders = (additionalHeaders: Record<string, string> = {}) => ({
+  "X-API-Key": API_KEY,
+  ...additionalHeaders,
+});
 
 export async function fetchDashboardSummary() {
-  const res = await fetch(`${API_BASE_URL}/dashboard/summary`);
+  const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch dashboard summary");
   return res.json();
 }
@@ -13,7 +21,7 @@ export async function fetchPaymentEvents(page = 0, size = 20, status?: string) {
   if (status) {
     url.searchParams.append("status", status);
   }
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch payment events");
   return res.json();
 }
@@ -25,7 +33,7 @@ export async function fetchRecoveryActions(page = 0, size = 20, status?: string)
   if (status) {
     url.searchParams.append("status", status);
   }
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch recovery actions");
   return res.json();
 }
@@ -34,7 +42,7 @@ export async function fetchAuditLogs(page = 0, size = 20) {
   const url = new URL(`${API_BASE_URL}/audit-log`);
   url.searchParams.append("page", page.toString());
   url.searchParams.append("size", size.toString());
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch audit logs");
   return res.json();
 }
@@ -42,6 +50,7 @@ export async function fetchAuditLogs(page = 0, size = 20) {
 export async function approveRecoveryAction(id: number) {
   const res = await fetch(`${API_BASE_URL}/recovery-actions/${id}/approve`, {
     method: "POST",
+    headers: getHeaders(),
   });
   if (!res.ok) {
     if (res.status === 404) throw new Error("Recovery Action not found");
@@ -53,9 +62,9 @@ export async function approveRecoveryAction(id: number) {
 export async function rejectRecoveryAction(id: number, reason: string) {
   const res = await fetch(`${API_BASE_URL}/recovery-actions/${id}/reject`, {
     method: "POST",
-    headers: {
+    headers: getHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) {

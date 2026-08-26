@@ -12,10 +12,10 @@ recommend recovery actions for failed mandates.
 - Layered architecture: Controller → Service → Repository → Entity
 
 ## Current Task
-**Phase 8: Edge Cases (Pending)**
+**Phase 12: Final Review (Pending)**
 
 ## Next Step
-Handle edge cases and further refine the integration.
+Perform final system checks and wrap up.
 
 ---
 
@@ -73,6 +73,47 @@ Handle edge cases and further refine the integration.
 - [x] Audit trail timeline
 - [x] Error handling and loading states
 
+### Phase 8: Edge Cases & Reconciliation ✅
+- [x] Scheduled job for missed webhook reconciliation
+- [x] Duplicate webhook handling (idempotency tests)
+- [x] Halt subscriptions on consecutive failures
+
+### Phase 9: Security Hardening ✅
+- [x] Spring Security API Key Auth on `/api/**` endpoints
+- [x] CORS hardening driven by environment variables
+- [x] Bucket4j rate limiting for webhooks and approval endpoints
+- [x] Prevent data exposure in `GlobalExceptionHandler`
+
+### Phase 10: Threat Model ✅
+- [x] Documented attack surfaces and defenses in `THREAT_MODEL.md`
+
+### Phase 11: Frontend Impact Toggle ✅
+- [x] "With RecoverMandate" vs "Without RecoverMandate" toggle on Dashboard
+- [x] Switch between static mock data (lost revenue) and live API data
+
+### Phase 12: UI Polish Pass (Production-Grade Visual Upgrade) ✅
+- [x] Razorpay-blue brand palette, Inter font, deep navy gradient mesh background
+- [x] Glassmorphism surfaces (backdrop-blur, subtle borders, soft shadows) for all cards
+- [x] Ambient gradient blobs with CSS-only slow-float animations
+- [x] Framer Motion: staggered reveals, spring-based transitions, animated count-up KPIs
+- [x] Category severity color coding (rose/amber/slate/purple) on Failed Mandates table
+- [x] Side-by-side approval layout (AI draft left, human decision right)
+- [x] Audit trail timeline with distinct actor icons/colors (SYSTEM/AI/HUMAN)
+- [x] Shimmer skeleton loading states, guided empty states, premium error state
+- [x] Fully responsive mobile layouts (stacked cards, collapsible table → cards)
+### Phase 13: Recruiter-Grade UI Upgrade (Hero, 3D, Themes) ✅
+- [x] Full Dark / Light Mode Theme Toggle (Sun/Moon switch)
+- [x] Interactive Storytelling Hero Section with diagrammatic flow
+- [x] CSS 3D parallax hover-tilt effect on KPI cards
+- [x] Custom zero-dependency tooltips for complex metrics
+- [x] Razorpay co-branding SVG logo in navbar
+### Phase 14: Award-Winning UX/UI Transformation (Fintech Studio) ✅
+- [x] Converted to professional Sidebar App Shell layout.
+- [x] Integrated Storytelling Hero sequence with animated flow (Fail -> AI -> Recovered).
+- [x] Added bespoke SVG animated sparklines to KPI cards.
+- [x] Built a "Typewriter" generative AI effect for the approval queue split-pane.
+- [x] Added multi-layered inset shadows to glassmorphism.
+- [x] Replaced simple button toggle with a draggable/clickable Impact Slider.
 ---
 
 ## Key Design Decisions
