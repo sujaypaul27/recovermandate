@@ -119,19 +119,55 @@ public class RecoveryActionService {
     
     @Transactional
     public void approveAction(Long actionId, String approvedBy) {
-        // Stub for future
+        RecoveryAction action = recoveryActionRepository.findById(actionId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("RecoveryAction not found with id: " + actionId));
+
+        if (!"DRAFTED".equals(action.getStatus())) {
+            throw new IllegalStateException("Action cannot be approved because it is not in DRAFTED state. Current state: " + action.getStatus());
+        }
+
+        action.setStatus("APPROVED");
+        recoveryActionRepository.save(action);
+
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_APPROVED", approvedBy, "Draft message approved.");
     }
 
     @Transactional
-    public void rejectAction(Long actionId, String rejectedBy) {
-        // Stub for future
-        auditService.log("RECOVERY_ACTION", actionId, "ACTION_REJECTED", rejectedBy, "Draft message rejected.");
+    public void rejectAction(Long actionId, String rejectedBy, String reason) {
+        RecoveryAction action = recoveryActionRepository.findById(actionId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("RecoveryAction not found with id: " + actionId));
+
+        if (!"DRAFTED".equals(action.getStatus())) {
+            throw new IllegalStateException("Action cannot be rejected because it is not in DRAFTED state. Current state: " + action.getStatus());
+        }
+
+        action.setStatus("REJECTED");
+        recoveryActionRepository.save(action);
+
+        auditService.log("RECOVERY_ACTION", actionId, "ACTION_REJECTED", rejectedBy, "Draft message rejected. Reason: " + reason);
     }
     
     @Transactional
     public void markAsSent(Long actionId) {
         // Stub for future
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_SENT", "SYSTEM", "Message sent to customer.");
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.recovermandate.dto.RecoveryActionResponse> getRecoveryActions(String status, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<RecoveryAction> actions;
+        if (status != null && !status.trim().isEmpty()) {
+            actions = recoveryActionRepository.findByStatus(status, pageable);
+        } else {
+            actions = recoveryActionRepository.findAll(pageable);
+        }
+        return actions.map(action -> com.recovermandate.dto.RecoveryActionResponse.builder()
+                .id(action.getId())
+                .failureClassificationId(action.getFailureClassification() != null ? action.getFailureClassification().getId() : null)
+                .aiDraftMessage(action.getAiDraftMessage())
+                .status(action.getStatus())
+                .createdAt(action.getCreatedAt())
+                .actor(action.getActor())
+                .build());
     }
 }

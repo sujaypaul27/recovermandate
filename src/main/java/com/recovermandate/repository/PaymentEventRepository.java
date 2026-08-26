@@ -9,4 +9,18 @@ import org.springframework.stereotype.Repository;
 public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long> {
 
     Optional<PaymentEvent> findByRazorpayPaymentId(String razorpayPaymentId);
+
+    long countByEventType(String eventType);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(p.amount), 0) FROM PaymentEvent p WHERE p.eventType = :eventType")
+    long sumAmountByEventType(@org.springframework.data.repository.query.Param("eventType") String eventType);
+
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT p FROM PaymentEvent p " +
+        "LEFT JOIN FailureClassification fc ON fc.paymentEvent = p " +
+        "LEFT JOIN RecoveryAction ra ON ra.failureClassification = fc " +
+        "WHERE (:category IS NULL OR fc.category = :category) " +
+        "AND (:status IS NULL OR ra.status = :status)"
+    )
+    org.springframework.data.domain.Page<PaymentEvent> findByFilters(@org.springframework.data.repository.query.Param("category") String category, @org.springframework.data.repository.query.Param("status") String status, org.springframework.data.domain.Pageable pageable);
 }

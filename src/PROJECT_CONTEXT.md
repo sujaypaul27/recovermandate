@@ -12,10 +12,10 @@ recommend recovery actions for failed mandates.
 - Layered architecture: Controller → Service → Repository → Entity
 
 ## Current Task
-**Phase 6: Backend APIs for Dashboard & Recovery Flow**
+**Phase 8: Edge Cases (Pending)**
 
 ## Next Step
-Expose REST APIs to list failed mandates, view AI drafted recovery actions, and allow human reviewers to approve/reject/send recovery actions.
+Handle edge cases and further refine the integration.
 
 ---
 
@@ -56,6 +56,22 @@ Expose REST APIs to list failed mandates, view AI drafted recovery actions, and 
 - [x] AI-recommended actions persisted as RecoveryAction entities
 - [x] Audit trail for AI decisions
 - [x] Unit and integration tests
+
+### Phase 6: Backend APIs for Dashboard & Recovery Flow ✅
+- [x] Global exception handler for safe API error responses
+- [x] Response/Request DTOs to hide internal entity details
+- [x] Repository queries with pagination, filtering, and aggregation
+- [x] Dashboard summary endpoint
+- [x] Payment events and audit log paginated endpoints
+- [x] Recovery action approve/reject endpoints with idempotent state transitions
+- [x] Controller and Service level testing
+
+### Phase 7: Frontend UI Implementation ✅
+- [x] Dashboard overview with KPI cards
+- [x] Failed mandates table with pagination and filtering
+- [x] Approval queue for recovery actions
+- [x] Audit trail timeline
+- [x] Error handling and loading states
 
 ---
 
