@@ -37,6 +37,9 @@ public class FailureClassification {
     @Column(name = "auto_recoverable", nullable = false)
     private boolean autoRecoverable;
 
+    @Column(name = "raw_error_code")
+    private String rawErrorCode;
+
     @Column(name = "decided_at", nullable = false)
     private Instant decidedAt;
 }

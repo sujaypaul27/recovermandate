@@ -45,4 +45,10 @@ public class RecoveryAction {
 
     @Column(name = "sent_at")
     private Instant sentAt;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private String actor;
 }

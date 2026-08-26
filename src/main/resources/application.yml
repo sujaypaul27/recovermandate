@@ -14,11 +14,15 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: false
-
 server:
   port: ${PORT:8080}
-
 logging:
   level:
     root: INFO
     com.recovermandate: DEBUG
+razorpay:
+  webhook:
+    secret: ${RAZORPAY_WEBHOOK_SECRET:}
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:}
