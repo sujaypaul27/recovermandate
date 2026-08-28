@@ -1,5 +1,5 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-const API_KEY = import.meta.env.VITE_API_KEY || "default-dev-key";
+export const API_KEY = import.meta.env.VITE_API_KEY || "default-dev-key";
 
 const getHeaders = (additionalHeaders: Record<string, string> = {}) => ({
   "X-API-Key": API_KEY,
@@ -74,3 +74,37 @@ export async function rejectRecoveryAction(id: number, reason: string) {
     throw new Error("Failed to reject recovery action");
   }
 }
+
+export async function fetchSystemHealth() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/health/detailed`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`Health check returned status ${res.status}`);
+    return await res.json();
+  } catch (error) {
+    return {
+      status: "DEGRADED",
+      geminiApi: { status: "UNKNOWN", model: "gemini-3.5-flash-lite" },
+      database: { status: "UNKNOWN" },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+export async function searchGlobal(query: string) {
+  if (!query || !query.trim()) return [];
+  try {
+    const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query.trim())}`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      // Endpoint may not exist yet or return 404 — fallback safely
+      return [];
+    }
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+

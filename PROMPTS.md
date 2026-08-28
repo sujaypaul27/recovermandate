@@ -27,8 +27,8 @@ RecoverMandate is being hardened from a working hackathon prototype into an ente
 - [x] Phase 1: Webhook Hardening & Replay Protection
 - [x] Phase 2: AI Resilience, Circuit Breaker & PII Redaction
 - [x] Phase 3: Observability — Trace ID & Tamper-Proof Audit Chain
-- [ ] Phase 4: SSE Live Streaming & System Health Endpoint
-- [ ] Phase 5: Frontend Modularization & UX Enhancements
+- [x] Phase 4: SSE Live Streaming & System Health Endpoint
+- [x] Phase 5: Frontend Modularization & UX Enhancements
 - [ ] Phase 6: Payment Link Generation & Dispatch Pipeline
 - [ ] Phase 7: Smart Retry Engine & Bank Health Tracker
 - [ ] Phase 8: Enhanced Dashboard & ROI Metrics
@@ -415,7 +415,7 @@ STEP 6 — REPORT.
 ---
 
 ## Phase 5 — Frontend Modularization & UX Enhancements
-Status: [ ] Pending
+Status: [x] Completed
 
 ### Goal & Scope
 Break the monolithic 995-line App.tsx into modular page components and hooks. Add SSE integration via a `useEventSource` hook, implement a Cmd+K search palette, add a transaction flow diagram component, tone adjuster slider, and degraded state banners.
