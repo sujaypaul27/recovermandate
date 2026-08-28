@@ -22,7 +22,7 @@ import java.util.Map;
 @Service
 public class GeminiClient {
 
-    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=";
 
     @Value("${gemini.api.key:}")
     private String apiKey;
