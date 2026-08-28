@@ -31,6 +31,8 @@ class RecoveryActionServiceTest {
     private RecoveryActionRepository recoveryActionRepository;
     @Mock
     private AuditService auditService;
+    @Mock
+    private SseService sseService;
 
     @InjectMocks
     private RecoveryActionService recoveryActionService;

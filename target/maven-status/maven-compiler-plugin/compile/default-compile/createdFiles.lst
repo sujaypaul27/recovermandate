@@ -15,6 +15,7 @@ com\recovermandate\controller\DashboardController.class
 com\recovermandate\repository\PaymentEventRepository.class
 com\recovermandate\entity\AuditLog$AuditLogBuilder.class
 com\recovermandate\entity\Plan.class
+com\recovermandate\service\SseService.class
 com\recovermandate\repository\AuditLogRepository.class
 com\recovermandate\repository\MerchantRepository.class
 com\recovermandate\config\MdcFilter.class
@@ -64,5 +65,6 @@ com\recovermandate\dto\RecoveryActionResponse.class
 com\recovermandate\entity\package-info.class
 com\recovermandate\entity\RecoveryAction.class
 com\recovermandate\webhook\RazorpaySignatureVerifier.class
+com\recovermandate\controller\SseController.class
 com\recovermandate\controller\RecoveryActionController.class
 com\recovermandate\entity\PaymentEvent.class

@@ -38,6 +38,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        // Support API Key in query parameter for SSE streaming (EventSource API does not support custom headers)
+        if (path.startsWith("/api/stream/")) {
+            String queryApiKey = request.getParameter("apiKey");
+            if (queryApiKey != null && expectedApiKey.equals(queryApiKey)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+
         // Only protect /api/** endpoints
         if (!path.startsWith("/api/")) {
             filterChain.doFilter(request, response);

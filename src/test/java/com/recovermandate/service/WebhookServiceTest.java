@@ -57,6 +57,9 @@ class WebhookServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private SseService sseService;
+
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
 
@@ -72,6 +75,7 @@ class WebhookServiceTest {
                 failureClassificationService,
                 recoveryActionService,
                 auditService,
+                sseService,
                 objectMapper
         );
     }

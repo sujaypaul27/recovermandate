@@ -42,6 +42,7 @@ public class WebhookService {
     private final FailureClassificationService failureClassificationService;
     private final RecoveryActionService recoveryActionService;
     private final AuditService auditService;
+    private final SseService sseService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -118,6 +119,15 @@ public class WebhookService {
             log.info("Payment event saved: id={}, razorpayPaymentId={}, eventType={}, traceId={}",
                     savedEvent.getId(), razorpayPaymentId, eventType, traceId);
 
+            // Broadcast real-time SSE event for dashboard
+            sseService.broadcast("webhook.received", java.util.Map.of(
+                    "id", savedEvent.getId(),
+                    "paymentId", razorpayPaymentId,
+                    "eventType", eventType,
+                    "amount", amount != null ? amount : 0L,
+                    "timestamp", Instant.now().toString()
+            ));
+
             // Record successful ingestion audit log
             auditService.log(
                     "PAYMENT_EVENT",
@@ -140,8 +150,15 @@ public class WebhookService {
                     );
                 } else {
                     com.recovermandate.entity.FailureClassification classification = failureClassificationService.classify(savedEvent);
-                    if (classification != null && !classification.isAutoRecoverable()) {
-                        recoveryActionService.processFailure(classification);
+                    if (classification != null) {
+                        sseService.broadcast("classification.complete", java.util.Map.of(
+                                "eventId", savedEvent.getId(),
+                                "category", classification.getCategory()
+                        ));
+
+                        if (!classification.isAutoRecoverable()) {
+                            recoveryActionService.processFailure(classification);
+                        }
                     }
                 }
             }

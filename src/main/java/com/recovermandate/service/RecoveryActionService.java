@@ -26,6 +26,7 @@ public class RecoveryActionService {
     private final RecoveryActionValidationService validationService;
     private final RecoveryActionRepository recoveryActionRepository;
     private final AuditService auditService;
+    private final SseService sseService;
 
     @Transactional
     public void processFailure(FailureClassification classification) {
@@ -91,6 +92,13 @@ public class RecoveryActionService {
                 .build();
 
         RecoveryAction savedAction = recoveryActionRepository.save(action);
+
+        // Broadcast real-time draft generation event for dashboard
+        sseService.broadcast("draft.generated", java.util.Map.of(
+                "actionId", savedAction.getId(),
+                "status", status,
+                "draftSource", draftSource != null ? draftSource : "AI"
+        ));
         
         if (blockReason.isPresent()) {
             log.warn("AI Draft blocked for classification {}: {}", classification.getId(), blockReason.get());
@@ -131,6 +139,11 @@ public class RecoveryActionService {
 
         action.setStatus("APPROVED");
         recoveryActionRepository.save(action);
+
+        // Broadcast real-time approval event
+        sseService.broadcast("action.approved", java.util.Map.of(
+                "actionId", actionId
+        ));
 
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_APPROVED", approvedBy, "Draft message approved.");
     }

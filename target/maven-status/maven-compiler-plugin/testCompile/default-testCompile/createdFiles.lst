@@ -9,7 +9,9 @@ com\recovermandate\integration\AIValidationIntegrationTest.class
 com\recovermandate\controller\RecoveryActionControllerTest.class
 com\recovermandate\service\RecoveryActionValidationServiceTest.class
 com\recovermandate\service\WebhookServiceTest.class
+com\recovermandate\controller\HealthControllerTest.class
 com\recovermandate\service\FailureClassificationServiceTest$DetermineCategoryTests.class
+com\recovermandate\controller\SseControllerTest.class
 com\recovermandate\controller\AuditLogControllerTest.class
 com\recovermandate\integration\WebhookIntegrationTest.class
 com\recovermandate\service\FailureClassificationServiceTest$NonApplicableTests.class
@@ -23,5 +25,6 @@ com\recovermandate\ai\GeminiClientTest.class
 com\recovermandate\service\FailureClassificationServiceTest$IdempotencyTests.class
 com\recovermandate\audit\AuditServiceTest.class
 com\recovermandate\service\RecoveryActionServiceTest.class
+com\recovermandate\service\SseServiceTest.class
 com\recovermandate\service\FailureClassificationServiceTest.class
 com\recovermandate\webhook\RazorpaySignatureVerifierTest.class
