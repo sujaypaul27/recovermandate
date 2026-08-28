@@ -41,6 +41,7 @@ public class WebhookService {
     private final MerchantRepository merchantRepository;
     private final FailureClassificationService failureClassificationService;
     private final RecoveryActionService recoveryActionService;
+    private final RetrySchedulerService retrySchedulerService;
     private final AuditService auditService;
     private final SseService sseService;
     private final ObjectMapper objectMapper;
@@ -155,6 +156,9 @@ public class WebhookService {
                                 "eventId", savedEvent.getId(),
                                 "category", classification.getCategory()
                         ));
+
+                        // Schedule automated algorithmic retries based on category backoff
+                        retrySchedulerService.scheduleRetries(savedEvent, classification);
 
                         if (!classification.isAutoRecoverable()) {
                             recoveryActionService.processFailure(classification);

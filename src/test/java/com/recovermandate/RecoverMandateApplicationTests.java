@@ -49,6 +49,12 @@ class RecoverMandateApplicationTests {
     @MockBean
     private com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
 
+    @MockBean
+    private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+
+    @MockBean
+    private com.recovermandate.repository.BankHealthSnapshotRepository bankHealthSnapshotRepository;
+
     @Test
     void contextLoads() {
     }

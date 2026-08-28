@@ -60,6 +60,9 @@ class WebhookServiceTest {
     @Mock
     private SseService sseService;
 
+    @Mock
+    private RetrySchedulerService retrySchedulerService;
+
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
 
@@ -74,6 +77,7 @@ class WebhookServiceTest {
                 merchantRepository,
                 failureClassificationService,
                 recoveryActionService,
+                retrySchedulerService,
                 auditService,
                 sseService,
                 objectMapper

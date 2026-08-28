@@ -39,10 +39,22 @@ class WebhookIntegrationTest {
     @Autowired
     private com.recovermandate.repository.RecoveryActionRepository recoveryActionRepository;
 
+    @Autowired
+    private com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
+
+    @Autowired
+    private com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
+
+    @Autowired
+    private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+
     @BeforeEach
     void setUp() {
         auditLogRepository.deleteAll();
+        dispatchLogRepository.deleteAll();
+        paymentLinkRepository.deleteAll();
         recoveryActionRepository.deleteAll();
+        retryScheduleRepository.deleteAll();
         failureClassificationRepository.deleteAll();
         paymentEventRepository.deleteAll();
     }

@@ -23,4 +23,6 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long
         "AND (:status IS NULL OR ra.status = :status)"
     )
     org.springframework.data.domain.Page<PaymentEvent> findByFilters(@org.springframework.data.repository.query.Param("category") String category, @org.springframework.data.repository.query.Param("status") String status, org.springframework.data.domain.Pageable pageable);
+
+    java.util.List<PaymentEvent> findByReceivedAtGreaterThanEqual(java.time.Instant since);
 }
