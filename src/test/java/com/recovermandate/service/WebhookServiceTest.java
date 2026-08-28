@@ -424,4 +424,72 @@ class WebhookServiceTest {
                 org.mockito.ArgumentMatchers.contains("halted")
         );
     }
+
+    @Test
+    @DisplayName("Should reject stale webhook older than replay window")
+    void handleVerifiedEvent_staleWebhook_rejected() {
+        long oldTimestamp = Instant.now().getEpochSecond() - 600; // 10 minutes ago (> 300s)
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment.failed",
+                  "created_at": %d,
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_stale_001",
+                        "amount": 49900
+                      }
+                    }
+                  }
+                }
+                """.formatted(oldTimestamp);
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        org.junit.jupiter.api.Assertions.assertNull(result);
+        verify(paymentEventRepository, never()).save(any());
+        verify(auditService).log(
+                eq("WEBHOOK"),
+                eq(0L),
+                eq("STALE_WEBHOOK_REJECTED"),
+                eq("SYSTEM"),
+                org.mockito.ArgumentMatchers.contains("exceeds replay window")
+        );
+    }
+
+    @Test
+    @DisplayName("Should accept fresh webhook with recent created_at timestamp")
+    void handleVerifiedEvent_freshWebhook_accepted() {
+        long recentTimestamp = Instant.now().getEpochSecond() - 10; // 10 seconds ago (< 300s)
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment.failed",
+                  "created_at": %d,
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_fresh_001",
+                        "amount": 49900
+                      }
+                    }
+                  }
+                }
+                """.formatted(recentTimestamp);
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_fresh_001")).thenReturn(Optional.empty());
+        PaymentEvent savedPayment = PaymentEvent.builder()
+                .id(999L)
+                .razorpayPaymentId("pay_fresh_001")
+                .eventType("payment.failed")
+                .build();
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenReturn(savedPayment);
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(result);
+        assertEquals(999L, result.getId());
+        verify(paymentEventRepository).save(any(PaymentEvent.class));
+    }
 }

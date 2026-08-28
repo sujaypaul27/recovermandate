@@ -17,6 +17,7 @@ com\recovermandate\entity\AuditLog$AuditLogBuilder.class
 com\recovermandate\entity\Plan.class
 com\recovermandate\repository\AuditLogRepository.class
 com\recovermandate\repository\MerchantRepository.class
+com\recovermandate\config\MdcFilter.class
 com\recovermandate\entity\AuditLog.class
 com\recovermandate\dto\RejectActionRequest.class
 com\recovermandate\service\RecoveryActionValidationService.class
@@ -50,6 +51,7 @@ com\recovermandate\service\DashboardService.class
 com\recovermandate\service\AuditQueryService.class
 com\recovermandate\dto\AuditLogResponse$AuditLogResponseBuilder.class
 com\recovermandate\entity\Merchant.class
+com\recovermandate\ai\HeuristicFallbackEngine.class
 com\recovermandate\webhook\RazorpayWebhookController.class
 com\recovermandate\repository\PlanRepository.class
 com\recovermandate\entity\FailureClassification$FailureClassificationBuilder.class

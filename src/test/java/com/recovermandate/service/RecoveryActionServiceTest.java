@@ -135,4 +135,35 @@ class RecoveryActionServiceTest {
                 contains("Contains discount")
         );
     }
+
+    @Test
+    void testProcessFailure_HeuristicFallback_RecordsHeuristicSource() {
+        classification.setAutoRecoverable(false);
+        String heuristicDraft = "Dear Customer,\n\nWe were unable to process your payment.";
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(heuristicDraft);
+        when(geminiClient.getLastDraftSource()).thenReturn("HEURISTIC");
+        when(validationService.validateDraft(heuristicDraft, 5000L)).thenReturn(Optional.empty());
+
+        RecoveryAction mockSaved = new RecoveryAction();
+        mockSaved.setId(3L);
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenReturn(mockSaved);
+
+        recoveryActionService.processFailure(classification);
+
+        ArgumentCaptor<RecoveryAction> actionCaptor = ArgumentCaptor.forClass(RecoveryAction.class);
+        verify(recoveryActionRepository).save(actionCaptor.capture());
+
+        RecoveryAction savedAction = actionCaptor.getValue();
+        assertEquals("DRAFTED", savedAction.getStatus());
+        assertEquals("HEURISTIC", savedAction.getDraftSource());
+        assertEquals(heuristicDraft, savedAction.getAiDraftMessage());
+
+        verify(auditService).log(
+                eq("RECOVERY_ACTION"),
+                eq(3L),
+                eq("AI_DRAFT_GENERATED"),
+                eq("SYSTEM"),
+                contains("via HEURISTIC")
+        );
+    }
 }

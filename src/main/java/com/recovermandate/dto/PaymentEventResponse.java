@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -13,6 +14,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class PaymentEventResponse {
     private Long id;
+    private UUID traceId;
     private String razorpayPaymentId;
     private String eventType;
     private Long amount;

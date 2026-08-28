@@ -63,6 +63,8 @@ public class RecoveryActionService {
                 daysSinceFailure
         );
 
+        String draftSource = geminiClient.getLastDraftSource();
+
         if (draftMessage == null) {
             log.warn("Gemini API failed to generate a draft for classification id={}", classification.getId());
             auditService.log(
@@ -82,6 +84,7 @@ public class RecoveryActionService {
         RecoveryAction action = RecoveryAction.builder()
                 .failureClassification(classification)
                 .aiDraftMessage(draftMessage)
+                .draftSource(draftSource)
                 .status(status)
                 .createdAt(Instant.now())
                 .actor("SYSTEM")
@@ -99,13 +102,13 @@ public class RecoveryActionService {
                     "AI draft blocked by validation gate. Reason: " + blockReason.get()
             );
         } else {
-            log.info("AI Draft generated and validated for classification {}", classification.getId());
+            log.info("AI Draft generated via {} and validated for classification {}", draftSource, classification.getId());
             auditService.log(
                     "RECOVERY_ACTION",
                     savedAction.getId(),
                     "AI_DRAFT_GENERATED",
                     "SYSTEM",
-                    "AI draft generated and passed validation."
+                    "AI draft generated via " + (draftSource != null ? draftSource : "AI") + " and passed validation."
             );
         }
     }
@@ -165,6 +168,7 @@ public class RecoveryActionService {
                 .id(action.getId())
                 .failureClassificationId(action.getFailureClassification() != null ? action.getFailureClassification().getId() : null)
                 .aiDraftMessage(action.getAiDraftMessage())
+                .draftSource(action.getDraftSource())
                 .status(action.getStatus())
                 .createdAt(action.getCreatedAt())
                 .actor(action.getActor())

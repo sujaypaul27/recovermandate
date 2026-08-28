@@ -1,0 +1,96 @@
+package com.recovermandate.audit;
+
+import com.recovermandate.entity.AuditLog;
+import com.recovermandate.repository.AuditLogRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
+
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class AuditServiceTest {
+
+    @Mock
+    private AuditLogRepository auditLogRepository;
+
+    @InjectMocks
+    private AuditService auditService;
+
+    @BeforeEach
+    void setUp() {
+        MDC.clear();
+        when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    @DisplayName("Should generate valid SHA-256 checksum and propagate traceId from MDC")
+    void log_withMdcTraceId_computesChecksumAndSaves() {
+        UUID expectedTraceId = UUID.randomUUID();
+        MDC.put("traceId", expectedTraceId.toString());
+
+        AuditLog log = auditService.log(
+                "PAYMENT_EVENT",
+                101L,
+                "WEBHOOK_INGESTED",
+                "SYSTEM",
+                "Payment event ingested"
+        );
+
+        assertNotNull(log);
+        assertEquals(expectedTraceId, log.getTraceId());
+        assertNotNull(log.getChecksum());
+        assertEquals(64, log.getChecksum().length()); // SHA-256 hex length
+        assertNotEquals("GENESIS", log.getChecksum());
+        assertEquals(log.getChecksum(), auditService.getLastChecksum());
+
+        MDC.clear();
+    }
+
+    @Test
+    @DisplayName("Should chain checksums sequentially across multiple log entries")
+    void log_sequentialCalls_chainsChecksums() {
+        AuditLog log1 = auditService.log("PAYMENT_EVENT", 1L, "ACTION_1", "SYSTEM", "First entry");
+        String checksum1 = log1.getChecksum();
+
+        AuditLog log2 = auditService.log("RECOVERY_ACTION", 2L, "ACTION_2", "SYSTEM", "Second entry");
+        String checksum2 = log2.getChecksum();
+
+        assertNotNull(checksum1);
+        assertNotNull(checksum2);
+        assertNotEquals(checksum1, checksum2);
+        assertEquals(checksum2, auditService.getLastChecksum());
+    }
+
+    @Test
+    @DisplayName("Should support overloaded log method with AI metadata")
+    void log_withAiMetadata_persistsAiFields() {
+        String aiModel = "gemini-3.5-flash-lite";
+        String promptHash = "a1b2c3d4e5f607182930405060708090a0b0c0d0e0f001122334455667788990";
+
+        AuditLog log = auditService.log(
+                "RECOVERY_ACTION",
+                50L,
+                "AI_DRAFT_GENERATED",
+                "SYSTEM",
+                "Draft generated",
+                aiModel,
+                promptHash
+        );
+
+        assertNotNull(log);
+        assertEquals(aiModel, log.getAiModelUsed());
+        assertEquals(promptHash, log.getAiPromptHash());
+        assertNotNull(log.getChecksum());
+    }
+}

@@ -1,8 +1,10 @@
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\ai\GeminiClient.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\ai\HeuristicFallbackEngine.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\ai\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\audit\AuditService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\audit\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\client\RazorpayApiClient.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\config\MdcFilter.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\AuditLogController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\DashboardController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\GlobalExceptionHandler.java

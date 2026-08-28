@@ -30,6 +30,7 @@ public class PaymentEventQueryService {
     private PaymentEventResponse mapToResponse(PaymentEvent event) {
         PaymentEventResponse response = PaymentEventResponse.builder()
                 .id(event.getId())
+                .traceId(event.getTraceId())
                 .razorpayPaymentId(event.getRazorpayPaymentId())
                 .eventType(event.getEventType())
                 .amount(event.getAmount())

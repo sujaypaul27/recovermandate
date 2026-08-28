@@ -24,6 +24,10 @@ public class AuditQueryService {
     private AuditLogResponse mapToResponse(AuditLog log) {
         return AuditLogResponse.builder()
                 .id(log.getId())
+                .traceId(log.getTraceId())
+                .checksum(log.getChecksum())
+                .aiModelUsed(log.getAiModelUsed())
+                .aiPromptHash(log.getAiPromptHash())
                 .entityType(log.getEntityType())
                 .entityId(log.getEntityId())
                 .action(log.getAction())

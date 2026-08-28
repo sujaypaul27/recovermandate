@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -13,6 +14,10 @@ import java.time.Instant;
 @AllArgsConstructor
 public class AuditLogResponse {
     private Long id;
+    private UUID traceId;
+    private String checksum;
+    private String aiModelUsed;
+    private String aiPromptHash;
     private String entityType;
     private Long entityId;
     private String action;

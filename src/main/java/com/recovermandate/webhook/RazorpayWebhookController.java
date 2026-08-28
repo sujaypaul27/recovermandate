@@ -48,6 +48,11 @@ public class RazorpayWebhookController {
         // Process verified webhook payload
         PaymentEvent paymentEvent = webhookService.handleVerifiedEvent(payload);
 
+        // Return 200 OK immediately — Razorpay requires response within 5s
+        if (paymentEvent == null) {
+            return ResponseEntity.ok("Webhook rejected or ignored");
+        }
+
         return ResponseEntity.ok("Webhook processed successfully with event id: " + paymentEvent.getId());
     }
 }

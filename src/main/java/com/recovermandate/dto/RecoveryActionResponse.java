@@ -15,6 +15,7 @@ public class RecoveryActionResponse {
     private Long id;
     private Long failureClassificationId;
     private String aiDraftMessage;
+    private String draftSource;
     private String status;
     private Instant createdAt;
     private String actor;

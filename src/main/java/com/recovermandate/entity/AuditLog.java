@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +24,18 @@ public class AuditLog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "trace_id")
+    private UUID traceId;
+
+    @Column(name = "checksum", length = 64)
+    private String checksum;
+
+    @Column(name = "ai_model_used", length = 50)
+    private String aiModelUsed;
+
+    @Column(name = "ai_prompt_hash", length = 64)
+    private String aiPromptHash;
 
     @Column(name = "entity_type", nullable = false)
     private String entityType;

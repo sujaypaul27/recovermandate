@@ -18,6 +18,8 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class WebhookService {
+
+    @Value("${razorpay.webhook.replay-window-seconds:300}")
+    private int replayWindowSeconds = 300;
 
     private final PaymentEventRepository paymentEventRepository;
     private final SubscriptionRepository subscriptionRepository;
@@ -47,6 +52,8 @@ public class WebhookService {
      */
     @Transactional
     public PaymentEvent handleVerifiedEvent(String rawPayload) {
+        UUID traceId = UUID.randomUUID();
+        MDC.put("traceId", traceId.toString());
         try {
             JsonNode root = objectMapper.readTree(rawPayload);
 
@@ -54,6 +61,10 @@ public class WebhookService {
 
             JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
             JsonNode subscriptionEntity = root.path("payload").path("subscription").path("entity");
+
+            if (isWebhookStale(root, paymentEntity)) {
+                return null;
+            }
 
             // Extract payment ID
             String razorpayPaymentId = extractPaymentId(root, paymentEntity);
@@ -93,6 +104,7 @@ public class WebhookService {
 
             // Create and save new PaymentEvent
             PaymentEvent paymentEvent = PaymentEvent.builder()
+                    .traceId(traceId)
                     .subscription(subscription)
                     .razorpayPaymentId(razorpayPaymentId)
                     .eventType(eventType)
@@ -103,8 +115,8 @@ public class WebhookService {
                     .build();
 
             PaymentEvent savedEvent = paymentEventRepository.save(paymentEvent);
-            log.info("Payment event saved: id={}, razorpayPaymentId={}, eventType={}",
-                    savedEvent.getId(), razorpayPaymentId, eventType);
+            log.info("Payment event saved: id={}, razorpayPaymentId={}, eventType={}, traceId={}",
+                    savedEvent.getId(), razorpayPaymentId, eventType, traceId);
 
             // Record successful ingestion audit log
             auditService.log(
@@ -145,6 +157,8 @@ public class WebhookService {
                     "Failed to process webhook payload: " + e.getMessage()
             );
             throw new RuntimeException("Failed to process webhook payload", e);
+        } finally {
+            MDC.remove("traceId");
         }
     }
 
@@ -163,6 +177,27 @@ public class WebhookService {
                 "SYSTEM",
                 "Invalid webhook signature verification failed for incoming request"
         );
+    }
+
+    private boolean isWebhookStale(JsonNode root, JsonNode paymentEntity) {
+        long webhookCreatedAt = root.path("created_at").asLong(0);
+        if (webhookCreatedAt == 0) {
+            return false;
+        }
+        long age = Instant.now().getEpochSecond() - webhookCreatedAt;
+        if (age > replayWindowSeconds) {
+            String paymentId = extractPaymentId(root, paymentEntity);
+            log.warn("Stale webhook rejected: age={}s, paymentId={}", age, paymentId);
+            auditService.log(
+                    "WEBHOOK",
+                    0L,
+                    "STALE_WEBHOOK_REJECTED",
+                    "SYSTEM",
+                    "Webhook rejected: age=" + age + "s exceeds replay window"
+            );
+            return true;
+        }
+        return false;
     }
 
     private String extractPaymentId(JsonNode root, JsonNode paymentEntity) {

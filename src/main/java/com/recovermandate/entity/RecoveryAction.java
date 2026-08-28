@@ -34,6 +34,9 @@ public class RecoveryAction {
     @Column(name = "ai_draft_message", columnDefinition = "TEXT")
     private String aiDraftMessage;
 
+    @Column(name = "draft_source")
+    private String draftSource;
+
     @Column(nullable = false)
     private String status;
 
