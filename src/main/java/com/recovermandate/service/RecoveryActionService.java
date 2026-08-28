@@ -5,6 +5,7 @@ import com.recovermandate.audit.AuditService;
 import com.recovermandate.entity.Customer;
 import com.recovermandate.entity.FailureClassification;
 import com.recovermandate.entity.PaymentEvent;
+import com.recovermandate.entity.PaymentLink;
 import com.recovermandate.entity.RecoveryAction;
 import com.recovermandate.entity.Subscription;
 import com.recovermandate.repository.RecoveryActionRepository;
@@ -27,6 +28,8 @@ public class RecoveryActionService {
     private final RecoveryActionRepository recoveryActionRepository;
     private final AuditService auditService;
     private final SseService sseService;
+    private final PaymentLinkService paymentLinkService;
+    private final DispatchService dispatchService;
 
     @Transactional
     public void processFailure(FailureClassification classification) {
@@ -138,6 +141,8 @@ public class RecoveryActionService {
         }
 
         action.setStatus("APPROVED");
+        action.setApprovedBy(approvedBy);
+        action.setApprovedAt(Instant.now());
         recoveryActionRepository.save(action);
 
         // Broadcast real-time approval event
@@ -146,6 +151,34 @@ public class RecoveryActionService {
         ));
 
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_APPROVED", approvedBy, "Draft message approved.");
+    }
+
+    /**
+     * Approves a recovery action, generates a Razorpay payment link, and dispatches multi-channel communications.
+     */
+    @Transactional
+    public RecoveryAction approveAndDispatch(Long actionId, String approvedBy) {
+        approveAction(actionId, approvedBy);
+
+        RecoveryAction action = recoveryActionRepository.findById(actionId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("RecoveryAction not found with id: " + actionId));
+
+        PaymentLink paymentLink = paymentLinkService.createLinkForRecoveryAction(action);
+        dispatchService.dispatchRecovery(action, paymentLink.getShortUrl());
+
+        action.setStatus("DISPATCHED");
+        action.setSentAt(Instant.now());
+        RecoveryAction updated = recoveryActionRepository.save(action);
+
+        auditService.log(
+                "RECOVERY_ACTION",
+                actionId,
+                "ACTION_DISPATCHED",
+                approvedBy,
+                "Recovery action dispatched via EMAIL with payment link: " + paymentLink.getShortUrl()
+        );
+
+        return updated;
     }
 
     @Transactional
@@ -165,7 +198,6 @@ public class RecoveryActionService {
     
     @Transactional
     public void markAsSent(Long actionId) {
-        // Stub for future
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_SENT", "SYSTEM", "Message sent to customer.");
     }
 
@@ -182,7 +214,11 @@ public class RecoveryActionService {
                 .failureClassificationId(action.getFailureClassification() != null ? action.getFailureClassification().getId() : null)
                 .aiDraftMessage(action.getAiDraftMessage())
                 .draftSource(action.getDraftSource())
+                .paymentLinkUrl(action.getPaymentLinkUrl())
                 .status(action.getStatus())
+                .approvedBy(action.getApprovedBy())
+                .approvedAt(action.getApprovedAt())
+                .sentAt(action.getSentAt())
                 .createdAt(action.getCreatedAt())
                 .actor(action.getActor())
                 .build());

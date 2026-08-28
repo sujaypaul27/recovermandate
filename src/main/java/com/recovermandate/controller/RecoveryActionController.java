@@ -25,6 +25,12 @@ public class RecoveryActionController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{id}/approve-and-dispatch")
+    public ResponseEntity<Void> approveAndDispatch(@PathVariable Long id) {
+        recoveryActionService.approveAndDispatch(id, "HUMAN");
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/{id}/reject")
     public ResponseEntity<Void> rejectAction(@PathVariable Long id, @Valid @RequestBody RejectActionRequest request) {
         recoveryActionService.rejectAction(id, "HUMAN", request.getReason());

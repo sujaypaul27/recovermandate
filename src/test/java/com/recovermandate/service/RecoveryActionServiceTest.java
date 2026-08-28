@@ -33,6 +33,10 @@ class RecoveryActionServiceTest {
     private AuditService auditService;
     @Mock
     private SseService sseService;
+    @Mock
+    private PaymentLinkService paymentLinkService;
+    @Mock
+    private DispatchService dispatchService;
 
     @InjectMocks
     private RecoveryActionService recoveryActionService;
@@ -166,6 +170,40 @@ class RecoveryActionServiceTest {
                 eq("AI_DRAFT_GENERATED"),
                 eq("SYSTEM"),
                 contains("via HEURISTIC")
+        );
+    }
+
+    @Test
+    void testApproveAndDispatch_GeneratesLinkAndDispatchesEmail() {
+        Long actionId = 55L;
+        RecoveryAction action = new RecoveryAction();
+        action.setId(actionId);
+        action.setStatus("DRAFTED");
+
+        when(recoveryActionRepository.findById(actionId)).thenReturn(Optional.of(action));
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> i.getArgument(0));
+
+        com.recovermandate.entity.PaymentLink paymentLink = com.recovermandate.entity.PaymentLink.builder()
+                .id(1L)
+                .shortUrl("https://rzp.io/l/testLink")
+                .build();
+        when(paymentLinkService.createLinkForRecoveryAction(action)).thenReturn(paymentLink);
+
+        RecoveryAction result = recoveryActionService.approveAndDispatch(actionId, "ADMIN_USER");
+
+        assertEquals("DISPATCHED", result.getStatus());
+        assertEquals("ADMIN_USER", result.getApprovedBy());
+        assertNotNull(result.getSentAt());
+        assertNotNull(result.getApprovedAt());
+
+        verify(paymentLinkService).createLinkForRecoveryAction(action);
+        verify(dispatchService).dispatchRecovery(action, "https://rzp.io/l/testLink");
+        verify(auditService).log(
+                eq("RECOVERY_ACTION"),
+                eq(actionId),
+                eq("ACTION_DISPATCHED"),
+                eq("ADMIN_USER"),
+                contains("https://rzp.io/l/testLink")
         );
     }
 }

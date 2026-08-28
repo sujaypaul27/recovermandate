@@ -16,7 +16,11 @@ public class RecoveryActionResponse {
     private Long failureClassificationId;
     private String aiDraftMessage;
     private String draftSource;
+    private String paymentLinkUrl;
     private String status;
+    private String approvedBy;
+    private Instant approvedAt;
+    private Instant sentAt;
     private Instant createdAt;
     private String actor;
 }

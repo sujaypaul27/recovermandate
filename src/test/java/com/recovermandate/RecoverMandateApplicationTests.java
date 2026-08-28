@@ -43,6 +43,12 @@ class RecoverMandateApplicationTests {
     @MockBean
     private AuditLogRepository auditLogRepository;
 
+    @MockBean
+    private com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
+
+    @MockBean
+    private com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
+
     @Test
     void contextLoads() {
     }

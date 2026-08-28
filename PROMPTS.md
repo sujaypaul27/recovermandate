@@ -507,7 +507,7 @@ STEP 6 — REPORT.
 ---
 
 ## Phase 6 — Payment Link Generation & Dispatch Pipeline
-Status: [ ] Pending
+Status: [x] Completed
 
 ### Goal & Scope
 Complete the recovery pipeline end-to-end: when a recovery action is approved, auto-generate a Razorpay Payment Link and dispatch the recovery message to the customer via email (simulated for hackathon). Create the payment_links and dispatch_logs tables.

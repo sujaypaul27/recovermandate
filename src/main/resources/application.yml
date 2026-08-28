@@ -24,6 +24,11 @@ razorpay:
   webhook:
     secret: ${RAZORPAY_WEBHOOK_SECRET:}
     replay-window-seconds: ${RAZORPAY_REPLAY_WINDOW:300}
+  api:
+    key:
+      id: ${RAZORPAY_KEY_ID:}
+      secret: ${RAZORPAY_KEY_SECRET:}
+    base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}
 gemini:
   api:
     key: ${GEMINI_API_KEY:}

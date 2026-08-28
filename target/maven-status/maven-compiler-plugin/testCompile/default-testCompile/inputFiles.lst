@@ -13,7 +13,9 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integratio
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\SecurityIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\WebhookIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\RecoverMandateApplicationTests.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DispatchServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\FailureClassificationServiceTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\PaymentLinkServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\RecoveryActionServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\RecoveryActionValidationServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\SseServiceTest.java

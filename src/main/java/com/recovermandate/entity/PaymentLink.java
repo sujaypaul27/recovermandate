@@ -15,46 +15,47 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Entity representing a Razorpay Payment Link generated for recovering a failed mandate.
+ */
 @Entity
-@Table(name = "recovery_actions")
+@Table(name = "payment_links")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RecoveryAction {
+public class PaymentLink {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "failure_classification_id", nullable = false, unique = true)
-    private FailureClassification failureClassification;
+    @JoinColumn(name = "recovery_action_id", nullable = false)
+    private RecoveryAction recoveryAction;
 
-    @Column(name = "ai_draft_message", columnDefinition = "TEXT")
-    private String aiDraftMessage;
+    @Column(name = "razorpay_link_id", nullable = false)
+    private String razorpayLinkId;
 
-    @Column(name = "draft_source")
-    private String draftSource;
-
-    @Column(name = "payment_link_url")
-    private String paymentLinkUrl;
+    @Column(name = "short_url", nullable = false)
+    private String shortUrl;
 
     @Column(nullable = false)
-    private String status;
+    private Long amount; // in paise
 
-    @Column(name = "approved_by")
-    private String approvedBy;
+    @Column(nullable = false)
+    @Builder.Default
+    private String currency = "INR";
 
-    @Column(name = "approved_at")
-    private Instant approvedAt;
+    @Column(name = "expire_by")
+    private Instant expireBy;
 
-    @Column(name = "sent_at")
-    private Instant sentAt;
+    @Column(nullable = false)
+    private String status; // CREATED, PAID, EXPIRED
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(nullable = false)
-    private String actor;
+    @Column(name = "paid_at")
+    private Instant paidAt;
 }

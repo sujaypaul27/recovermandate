@@ -41,6 +41,13 @@ class RecoveryActionControllerTest {
     }
 
     @Test
+    void approveAndDispatch_success_returnsOk() throws Exception {
+        mockMvc.perform(post("/api/recovery-actions/1/approve-and-dispatch"))
+                .andExpect(status().isOk());
+        verify(recoveryActionService).approveAndDispatch(eq(1L), eq("HUMAN"));
+    }
+
+    @Test
     void approveAction_notFound_returns404() throws Exception {
         doThrow(new EntityNotFoundException("Not found")).when(recoveryActionService).approveAction(1L, "HUMAN");
         

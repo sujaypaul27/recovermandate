@@ -1,6 +1,7 @@
 com\recovermandate\integration\SecurityIntegrationTest.class
 com\recovermandate\controller\PaymentEventControllerTest.class
 com\recovermandate\service\FailureClassificationServiceTest$UnknownTests.class
+com\recovermandate\service\PaymentLinkServiceTest.class
 com\recovermandate\ai\HeuristicFallbackEngineTest.class
 com\recovermandate\service\FailureClassificationServiceTest$ExpiredMandateTests.class
 com\recovermandate\service\FailureClassificationServiceTest$TechnicalDeclineTests.class
@@ -22,6 +23,7 @@ com\recovermandate\service\FailureClassificationServiceTest$AuditReasoningTests.
 com\recovermandate\webhook\RazorpayWebhookControllerTest.class
 com\recovermandate\RecoverMandateApplicationTests.class
 com\recovermandate\ai\GeminiClientTest.class
+com\recovermandate\service\DispatchServiceTest.class
 com\recovermandate\service\FailureClassificationServiceTest$IdempotencyTests.class
 com\recovermandate\audit\AuditServiceTest.class
 com\recovermandate\service\RecoveryActionServiceTest.class
