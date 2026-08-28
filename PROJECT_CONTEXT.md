@@ -164,7 +164,7 @@ RecoverMandate is an enterprise-grade payment failure observability, AI-driven d
 | 5 | Frontend Modularization & UX Polish | ✅ Completed | Extract App.tsx, Cmd+K search, flow diagram, tone slider |
 | 6 | Payment Link Generation & Dispatch Pipeline | ✅ Completed | Razorpay Payment Links API, dispatch service |
 | 7 | Smart Retry Engine & Bank Health Tracker | ✅ Completed | Category-based backoff, issuer failure rate monitoring |
-| 8 | Enhanced Dashboard & ROI Metrics | ⬜ Pending | Recovery funnel, MTTR, success rate, category breakdown |
+| 8 | Enhanced Dashboard & ROI Metrics | ✅ Completed | Recovery funnel, MTTR, success rate, category breakdown |
 
 ---
 

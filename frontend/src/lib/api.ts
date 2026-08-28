@@ -6,7 +6,24 @@ const getHeaders = (additionalHeaders: Record<string, string> = {}) => ({
   ...additionalHeaders,
 });
 
-export async function fetchDashboardSummary() {
+export interface DashboardSummary {
+  recoveredAmount: number;
+  failedCount: number;
+  pendingApprovalsCount: number;
+  blockedDraftsCount: number;
+  totalPaymentsProcessed: number;
+  successfulPaymentsCount: number;
+  successRate: number;
+  avgResolutionTimeMinutes: number;
+  failuresByCategory: Record<string, number>;
+  draftsGenerated: number;
+  draftsApproved: number;
+  messagesDispatched: number;
+  paymentsRecovered: number;
+  recoveryRate: number;
+}
+
+export async function fetchDashboardSummary(): Promise<DashboardSummary> {
   const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
     headers: getHeaders(),
   });

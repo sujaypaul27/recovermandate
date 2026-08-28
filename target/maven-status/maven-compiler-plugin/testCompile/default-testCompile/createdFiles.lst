@@ -8,6 +8,7 @@ com\recovermandate\service\FailureClassificationServiceTest$ExpiredMandateTests.
 com\recovermandate\service\FailureClassificationServiceTest$TechnicalDeclineTests.class
 com\recovermandate\service\FailureClassificationServiceTest$InsufficientFundsTests.class
 com\recovermandate\integration\AIValidationIntegrationTest.class
+com\recovermandate\service\DashboardServiceTest.class
 com\recovermandate\controller\RecoveryActionControllerTest.class
 com\recovermandate\service\RecoveryActionValidationServiceTest.class
 com\recovermandate\service\WebhookServiceTest.class

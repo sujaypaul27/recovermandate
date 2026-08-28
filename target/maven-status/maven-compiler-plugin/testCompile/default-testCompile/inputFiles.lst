@@ -15,6 +15,7 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integratio
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\RecoverMandateApplicationTests.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\scheduler\RetryExecutionSchedulerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\BankHealthServiceTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DashboardServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DispatchServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\FailureClassificationServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\PaymentLinkServiceTest.java

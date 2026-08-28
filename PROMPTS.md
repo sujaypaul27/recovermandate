@@ -679,7 +679,7 @@ STEP 6 — REPORT.
 ---
 
 ## Phase 8 — Enhanced Dashboard & ROI Metrics
-Status: [ ] Pending
+Status: [x] Completed
 
 ### Goal & Scope
 Expand the dashboard with enterprise-grade ROI metrics: recovery rate, MTTR, category breakdown, daily time series, and a recovery funnel. Update both backend DTO and frontend to display these metrics prominently.

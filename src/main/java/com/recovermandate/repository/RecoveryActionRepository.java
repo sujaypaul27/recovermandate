@@ -13,4 +13,5 @@ public interface RecoveryActionRepository extends JpaRepository<RecoveryAction, 
     Optional<RecoveryAction> findByFailureClassification(FailureClassification classification);
     org.springframework.data.domain.Page<RecoveryAction> findByStatus(String status, org.springframework.data.domain.Pageable pageable);
     org.springframework.data.domain.Page<RecoveryAction> findAll(org.springframework.data.domain.Pageable pageable);
+    java.util.List<RecoveryAction> findByApprovedAtIsNotNull();
 }

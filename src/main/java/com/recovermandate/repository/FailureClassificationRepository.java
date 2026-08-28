@@ -10,4 +10,7 @@ import org.springframework.stereotype.Repository;
 public interface FailureClassificationRepository extends JpaRepository<FailureClassification, Long> {
 
     Optional<FailureClassification> findByPaymentEvent(PaymentEvent paymentEvent);
+
+    @org.springframework.data.jpa.repository.Query("SELECT fc.category, COUNT(fc) FROM FailureClassification fc GROUP BY fc.category")
+    java.util.List<Object[]> countByCategory();
 }

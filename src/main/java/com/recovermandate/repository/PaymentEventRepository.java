@@ -25,4 +25,7 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long
     org.springframework.data.domain.Page<PaymentEvent> findByFilters(@org.springframework.data.repository.query.Param("category") String category, @org.springframework.data.repository.query.Param("status") String status, org.springframework.data.domain.Pageable pageable);
 
     java.util.List<PaymentEvent> findByReceivedAtGreaterThanEqual(java.time.Instant since);
+
+    @org.springframework.data.jpa.repository.Query("SELECT fc.category, COUNT(fc) FROM FailureClassification fc GROUP BY fc.category")
+    java.util.List<Object[]> countFailuresByCategory();
 }

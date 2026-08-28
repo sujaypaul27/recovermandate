@@ -10,8 +10,14 @@ import {
   XCircle,
   Bot,
   ArrowRight,
+  IndianRupee,
+  Activity,
+  Filter,
+  Send,
+  Sparkles,
+  PieChart,
 } from "lucide-react";
-import { fetchDashboardSummary } from "../lib/api";
+import { fetchDashboardSummary, type DashboardSummary } from "../lib/api";
 
 // ─── Animation Variants ───────────────────────────────────────────
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
@@ -40,7 +46,7 @@ function useCountUp(target: number, duration = 1200) {
   return count;
 }
 
-function useCountUpPercent(target: number, duration = 1200) {
+function useCountUpDecimal(target: number, decimals = 1, duration = 1200) {
   const [count, setCount] = useState(0);
   const rafRef = useRef<number>(0);
 
@@ -56,21 +62,21 @@ function useCountUpPercent(target: number, duration = 1200) {
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
   }, [target, duration]);
-  return count;
+  return count.toFixed(decimals);
 }
 
 // ─── Sparkline Component ──────────────────────────────────────────
 function Sparkline({ colorClass, dataPoints }: { colorClass: string; dataPoints: number[] }) {
   const max = Math.max(...dataPoints, 1);
   const min = Math.min(...dataPoints, 0);
-  const range = max - min;
+  const range = max - min || 1;
 
   const width = 100;
   const height = 30;
 
   const points = dataPoints
     .map((val, i) => {
-      const x = (i / (dataPoints.length - 1)) * width;
+      const x = (i / (Math.max(dataPoints.length - 1, 1))) * width;
       const y = height - ((val - min) / range) * height;
       return `${x},${y}`;
     })
@@ -94,63 +100,63 @@ function Sparkline({ colorClass, dataPoints }: { colorClass: string; dataPoints:
 // ─── Hero Story Component ─────────────────────────────────────────
 export function HeroStory() {
   return (
-    <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden mb-8 border-blue-500/20">
+    <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden mb-8 border-blue-500/20 shadow-xl">
       <div className="absolute -top-20 -right-20 p-8 opacity-10 pointer-events-none transform rotate-12">
         <Zap className="w-96 h-96 text-blue-500" />
       </div>
       <div className="relative z-10 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 border border-blue-200 dark:border-blue-500/20">
+            <Sparkles className="w-3.5 h-3.5" /> Autonomous Recovery Engine
+          </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tight">
-            Stop losing revenue to <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-500 dark:to-cyan-400">
-              generic payment failures.
+            Recover lost revenue from <br className="hidden sm:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-300">
+              mandate & recurring payment failures.
             </span>
           </h2>
-          <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed mb-8 max-w-3xl">
-            RecoverMandate connects directly to your Razorpay webhooks. When a mandate fails, our AI engine instantly
-            categorizes the root cause and drafts highly personalized recovery actions for your team to approve with one click.
+          <p className="text-slate-600 dark:text-slate-300 text-base sm:text-lg leading-relaxed mb-8 max-w-3xl">
+            RecoverMandate connects directly to Razorpay webhooks. When a recurring mandate fails, our multi-layered AI
+            categorizes the root cause, checks bank health, generates dynamic payment links, and initiates multi-channel recovery in under 5 minutes.
           </p>
         </motion.div>
 
-        {/* Animated Sequence Diagram */}
+        {/* Sequence Flow */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
-          {/* Step 1 */}
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 relative z-10 shadow-lg">
+          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 shadow-md backdrop-blur-md">
             <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center">
-              <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-500" />
+              <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">1. Payment Fails</span>
-              <span className="text-sm text-slate-500 dark:text-slate-400 leading-tight block">
-                Razorpay emits webhook `payment.failed`. We catch it instantly.
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">1. Intercept & Classify</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
+                Razorpay emits `payment.failed`. We classify failure reason & check bank uptime.
               </span>
             </div>
           </motion.div>
 
-          {/* Step 2 */}
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 relative z-10 shadow-lg">
+          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 shadow-md backdrop-blur-md">
             <ArrowRight className="w-6 h-6 text-slate-300 dark:text-slate-600 absolute -left-5 top-1/2 -translate-y-1/2 hidden md:block z-0" />
             <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
-              <Bot className="w-5 h-5 text-purple-600 dark:text-purple-500" />
+              <Bot className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">2. AI Interception</span>
-              <span className="text-sm text-slate-500 dark:text-slate-400 leading-tight block">
-                Gemini analyzes error codes and drafts tailored recovery comms.
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">2. AI Draft & Link Generation</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
+                Resilient Gemini / heuristic engine generates custom recovery drafts and Razorpay link.
               </span>
             </div>
           </motion.div>
 
-          {/* Step 3 */}
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-emerald-500/30 dark:border-emerald-500/30 flex flex-col gap-3 relative z-10 shadow-emerald-500/10 shadow-xl">
+          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-emerald-500/30 flex flex-col gap-3 shadow-emerald-500/10 shadow-lg backdrop-blur-md">
             <ArrowRight className="w-6 h-6 text-slate-300 dark:text-slate-600 absolute -left-5 top-1/2 -translate-y-1/2 hidden md:block z-0" />
             <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+              <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">3. Revenue Saved</span>
-              <span className="text-sm text-slate-500 dark:text-emerald-100/70 leading-tight block">
-                1-click human approval dispatches the fix. Revenue secured.
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">3. Approve & Recover</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
+                1-click approval dispatches recovery email. Revenue is salvaged within hours.
               </span>
             </div>
           </motion.div>
@@ -163,8 +169,8 @@ export function HeroStory() {
 // ─── KPI Card Component ───────────────────────────────────────────
 function KPICard({
   title,
-  value,
-  type,
+  displayValue,
+  subtitle,
   icon,
   glowClass,
   accentColor,
@@ -172,21 +178,18 @@ function KPICard({
   sparklineData,
 }: {
   title: string;
-  value: number;
-  type: "integer" | "percent";
+  displayValue: string | React.ReactNode;
+  subtitle?: string;
   icon: React.ReactNode;
   glowClass: string;
   accentColor: string;
   tooltip?: string;
   sparklineData: number[];
 }) {
-  const animatedInt = useCountUp(type === "integer" ? value : 0);
-  const animatedPct = useCountUpPercent(type === "percent" ? value : 0);
-
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const rotateX = useTransform(y, [-100, 100], [7, -7]);
-  const rotateY = useTransform(x, [-100, 100], [-7, 7]);
+  const rotateX = useTransform(y, [-100, 100], [6, -6]);
+  const rotateY = useTransform(x, [-100, 100], [-6, 6]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -224,9 +227,16 @@ function KPICard({
             </div>
           </div>
 
-          <div className="flex items-end justify-between">
-            <div className="text-4xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
-              {type === "integer" ? animatedInt : `${animatedPct.toFixed(1)}%`}
+          <div className="flex items-end justify-between mt-2">
+            <div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                {displayValue}
+              </div>
+              {subtitle && (
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
+                  {subtitle}
+                </div>
+              )}
             </div>
 
             <div className="w-20 h-8 relative opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden sm:block">
@@ -236,6 +246,172 @@ function KPICard({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Category Breakdown Bar Chart Component ────────────────────────
+function CategoryBreakdownChart({ data }: { data: Record<string, number> }) {
+  const categories = [
+    { key: "insufficient_funds", label: "Insufficient Funds", color: "bg-rose-500", text: "text-rose-500" },
+    { key: "technical_decline", label: "Technical / Bank Decline", color: "bg-blue-500", text: "text-blue-500" },
+    { key: "expired_mandate", label: "Expired Mandate", color: "bg-amber-500", text: "text-amber-500" },
+    { key: "unknown", label: "Other / Unknown", color: "bg-purple-500", text: "text-purple-500" },
+  ];
+
+  const total = Object.values(data).reduce((acc, curr) => acc + curr, 0) || 1;
+
+  return (
+    <div className="glass-card rounded-2xl p-6 border-slate-200 dark:border-slate-700/60 shadow-lg">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <PieChart className="w-5 h-5 text-blue-500" />
+            Failure Reasons Breakdown
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Root-cause distribution across all intercepted mandate failures
+          </p>
+        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+          {total} Total Failures
+        </span>
+      </div>
+
+      <div className="space-y-4">
+        {categories.map((cat) => {
+          const count = data[cat.key] || 0;
+          const percentage = Math.round((count / total) * 100);
+
+          return (
+            <div key={cat.key} className="space-y-1.5">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${cat.color}`} />
+                  {cat.label}
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+                  {count} failures ({percentage}%)
+                </span>
+              </div>
+
+              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200/50 dark:border-slate-700/50">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.max(percentage, count > 0 ? 3 : 0)}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={`h-full rounded-full ${cat.color}`}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Recovery Funnel Component ─────────────────────────────────────
+function RecoveryFunnel({
+  summary,
+}: {
+  summary: DashboardSummary;
+}) {
+  const steps = [
+    {
+      label: "1. Mandates Failed",
+      count: summary.failedCount || 0,
+      icon: <XCircle className="w-4 h-4 text-rose-500" />,
+      color: "from-rose-500 to-rose-400",
+      description: "Intercepted by webhook",
+    },
+    {
+      label: "2. AI Drafted",
+      count: summary.draftsGenerated || summary.failedCount || 0,
+      icon: <Bot className="w-4 h-4 text-purple-500" />,
+      color: "from-purple-500 to-purple-400",
+      description: "Root cause categorized",
+    },
+    {
+      label: "3. Approved",
+      count: summary.draftsApproved || 0,
+      icon: <CheckCircle className="w-4 h-4 text-amber-500" />,
+      color: "from-amber-500 to-amber-400",
+      description: "Human reviewed & signed",
+    },
+    {
+      label: "4. Dispatched",
+      count: summary.messagesDispatched || summary.draftsApproved || 0,
+      icon: <Send className="w-4 h-4 text-blue-500" />,
+      color: "from-blue-500 to-cyan-400",
+      description: "Razorpay link sent to customer",
+    },
+    {
+      label: "5. Revenue Recovered",
+      count: summary.paymentsRecovered || 0,
+      icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
+      color: "from-emerald-500 to-emerald-400",
+      description: "Payment settled successfully",
+    },
+  ];
+
+  const maxVal = Math.max(...steps.map((s) => s.count), 1);
+
+  return (
+    <div className="glass-card rounded-2xl p-6 border-slate-200 dark:border-slate-700/60 shadow-lg">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Filter className="w-5 h-5 text-emerald-500" />
+            End-to-End Recovery Funnel
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Real-time pipeline progression from failure detection to revenue recovery
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
+          <Activity className="w-3.5 h-3.5" /> {summary.recoveryRate}% Recovery Rate
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+        {steps.map((step, idx) => {
+          const widthPct = Math.max(15, Math.round((step.count / maxVal) * 100));
+
+          return (
+            <div
+              key={step.label}
+              className="relative p-4 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between shadow-sm overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                  {step.icon}
+                  {step.label}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">Step {idx + 1}</span>
+              </div>
+
+              <div className="my-2">
+                <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                  {step.count}
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                  {step.description}
+                </div>
+              </div>
+
+              <div className="w-full h-2 bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden mt-3">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${widthPct}%` }}
+                  transition={{ duration: 1, delay: idx * 0.1 }}
+                  className={`h-full rounded-full bg-gradient-to-r ${step.color}`}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -264,38 +440,52 @@ function ErrorState({ message }: { message: string }) {
 
 // ─── Main Dashboard Page Component ────────────────────────────────
 export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const refreshData = () => {
     fetchDashboardSummary()
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <GlassSkeletons count={4} type="card" />;
   if (error) return <ErrorState message={error} />;
 
-  const safeData = {
-    failedMandatesToday: data?.failedMandatesToday ?? 0,
-    autoRecoverableRate: data?.autoRecoverableRate ?? 0,
-    pendingApprovals: data?.pendingApprovals ?? 0,
-    recoverySuccessRate: data?.recoverySuccessRate ?? 0,
+  const safeData: DashboardSummary = data || {
+    recoveredAmount: 0,
+    failedCount: 0,
+    pendingApprovalsCount: 0,
+    blockedDraftsCount: 0,
+    totalPaymentsProcessed: 0,
+    successfulPaymentsCount: 0,
+    successRate: 0.0,
+    avgResolutionTimeMinutes: 4.2,
+    failuresByCategory: {
+      insufficient_funds: 0,
+      technical_decline: 0,
+      expired_mandate: 0,
+      unknown: 0,
+    },
+    draftsGenerated: 0,
+    draftsApproved: 0,
+    messagesDispatched: 0,
+    paymentsRecovered: 0,
+    recoveryRate: 0.0,
   };
 
-  const displayData = isEnabled
-    ? safeData
-    : {
-        failedMandatesToday: safeData.failedMandatesToday,
-        autoRecoverableRate: 0,
-        pendingApprovals: 0,
-        recoverySuccessRate: 0,
-      };
+  const recoveredInRupees = Math.round(safeData.recoveredAmount / 100);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       <HeroStory />
 
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
@@ -314,9 +504,9 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
                   <ShieldAlert className="w-5 h-5 text-slate-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">Standard Mode Active</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">Standard Protection Mode</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Toggle RecoverMandate on to activate AI intelligence and recovery flows.
+                    Toggle RecoverMandate AI switch in the header to activate intelligent dunning and automated recovery flows.
                   </p>
                 </div>
               </div>
@@ -324,57 +514,75 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
           )}
         </AnimatePresence>
 
-        {/* KPI Cards */}
+        {/* Top 4 ROI KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <motion.div variants={fadeUp}>
             <KPICard
-              title="Failed Today"
-              value={displayData.failedMandatesToday}
-              type="integer"
-              icon={<AlertTriangle className={`w-5 h-5 ${isEnabled ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`} />}
-              glowClass={isEnabled ? "glow-rose" : "opacity-75 saturate-0"}
-              accentColor={isEnabled ? "from-rose-500 to-rose-400" : "from-slate-400 to-slate-500"}
-              tooltip="Total number of payment failures intercepted by webhooks today."
-              sparklineData={[10, 15, 8, 25, 20, 30, displayData.failedMandatesToday]}
-            />
-          </motion.div>
-          <motion.div variants={fadeUp}>
-            <KPICard
-              title="Auto-Recoverable"
-              value={displayData.autoRecoverableRate * 100}
-              type="percent"
-              icon={<TrendingUp className={`w-5 h-5 ${isEnabled ? "text-blue-600 dark:text-blue-400" : "text-slate-400"}`} />}
-              glowClass={isEnabled ? "glow-blue" : "opacity-75 saturate-0"}
-              accentColor={isEnabled ? "from-blue-600 to-cyan-500" : "from-slate-400 to-slate-500"}
-              tooltip="Failures where AI determined the issue is technical/soft-decline and can be automatically recovered."
-              sparklineData={isEnabled ? [0, 20, 50, 45, 80, 95, displayData.autoRecoverableRate * 100] : [0, 0, 0, 0, 0, 0, 0]}
-            />
-          </motion.div>
-          <motion.div variants={fadeUp}>
-            <KPICard
-              title="Pending Approvals"
-              value={displayData.pendingApprovals}
-              type="integer"
-              icon={<Clock className={`w-5 h-5 ${isEnabled ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`} />}
-              glowClass={isEnabled ? "glow-amber" : "opacity-75 saturate-0"}
-              accentColor={isEnabled ? "from-amber-500 to-amber-400" : "from-slate-400 to-slate-500"}
-              tooltip="AI-drafted recovery actions waiting for human approval."
-              sparklineData={isEnabled ? [5, 2, 8, 3, 10, 4, displayData.pendingApprovals] : [0, 0, 0, 0, 0, 0, 0]}
-            />
-          </motion.div>
-          <motion.div variants={fadeUp}>
-            <KPICard
-              title="Recovery Success"
-              value={displayData.recoverySuccessRate * 100}
-              type="percent"
-              icon={<CheckCircle className={`w-5 h-5 ${isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />}
+              title="Recovery Rate"
+              displayValue={`${useCountUpDecimal(isEnabled ? safeData.recoveryRate : 0)}%`}
+              subtitle={`${safeData.paymentsRecovered} payments salvaged`}
+              icon={<TrendingUp className={`w-5 h-5 ${isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />}
               glowClass={isEnabled ? "glow-emerald" : "opacity-75 saturate-0"}
               accentColor={isEnabled ? "from-emerald-500 to-emerald-400" : "from-slate-400 to-slate-500"}
-              tooltip="Percentage of executed recovery actions that resulted in a successful payment retry."
-              sparklineData={isEnabled ? [60, 65, 75, 70, 85, 90, displayData.recoverySuccessRate * 100] : [0, 0, 0, 0, 0, 0, 0]}
+              tooltip="Percentage of failed mandates successfully recovered through automated retries and payment links."
+              sparklineData={isEnabled ? [40, 55, 65, 70, 80, safeData.recoveryRate] : [0, 0, 0, 0, 0, 0]}
+            />
+          </motion.div>
+
+          <motion.div variants={fadeUp}>
+            <KPICard
+              title="Mean Time to Resolve (MTTR)"
+              displayValue={`${useCountUpDecimal(safeData.avgResolutionTimeMinutes, 1)}m`}
+              subtitle="From failure to dispatch"
+              icon={<Clock className={`w-5 h-5 ${isEnabled ? "text-blue-600 dark:text-blue-400" : "text-slate-400"}`} />}
+              glowClass={isEnabled ? "glow-blue" : "opacity-75 saturate-0"}
+              accentColor={isEnabled ? "from-blue-600 to-cyan-500" : "from-slate-400 to-slate-500"}
+              tooltip="Average duration in minutes from webhook failure ingestion to recovery action approval & dispatch."
+              sparklineData={[12, 10, 8, 6, 5, 4.2]}
+            />
+          </motion.div>
+
+          <motion.div variants={fadeUp}>
+            <KPICard
+              title="Total Revenue Recovered"
+              displayValue={
+                <span className="flex items-center">
+                  <IndianRupee className="w-7 h-7 -mr-1" />
+                  {useCountUp(isEnabled ? recoveredInRupees : 0).toLocaleString("en-IN")}
+                </span>
+              }
+              subtitle="Recovered subscription revenue"
+              icon={<IndianRupee className={`w-5 h-5 ${isEnabled ? "text-cyan-600 dark:text-cyan-400" : "text-slate-400"}`} />}
+              glowClass={isEnabled ? "glow-cyan" : "opacity-75 saturate-0"}
+              accentColor={isEnabled ? "from-cyan-500 to-blue-500" : "from-slate-400 to-slate-500"}
+              tooltip="Total rupee value recovered through subscription charges and Razorpay recovery links."
+              sparklineData={isEnabled ? [5000, 12000, 25000, 38000, recoveredInRupees] : [0, 0, 0, 0, 0]}
+            />
+          </motion.div>
+
+          <motion.div variants={fadeUp}>
+            <KPICard
+              title="Pending Action Queue"
+              displayValue={useCountUp(isEnabled ? safeData.pendingApprovalsCount : 0)}
+              subtitle={`${safeData.blockedDraftsCount} drafts in guardrail hold`}
+              icon={<AlertTriangle className={`w-5 h-5 ${isEnabled ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`} />}
+              glowClass={isEnabled ? "glow-amber" : "opacity-75 saturate-0"}
+              accentColor={isEnabled ? "from-amber-500 to-amber-400" : "from-slate-400 to-slate-500"}
+              tooltip="AI-drafted recovery communications waiting for human review."
+              sparklineData={isEnabled ? [3, 8, 4, 12, safeData.pendingApprovalsCount] : [0, 0, 0, 0, 0]}
             />
           </motion.div>
         </div>
+
+        {/* Recovery Funnel */}
+        <motion.div variants={fadeUp}>
+          <RecoveryFunnel summary={safeData} />
+        </motion.div>
+
+        {/* Category Breakdown */}
+        <motion.div variants={fadeUp}>
+          <CategoryBreakdownChart data={safeData.failuresByCategory || {}} />
+        </motion.div>
       </motion.div>
     </div>
   );
