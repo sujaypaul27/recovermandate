@@ -13,3 +13,4 @@ public class RecoverMandateApplication {
         SpringApplication.run(RecoverMandateApplication.class, args);
     }
 }
+//
