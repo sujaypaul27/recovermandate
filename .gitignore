@@ -17,3 +17,10 @@ frontend/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation / Prompts
+PROJECT_CONTEXT.md
+PROMPTS.md
+project_context.md
+prompts.md
+
