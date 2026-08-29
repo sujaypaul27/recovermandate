@@ -39,6 +39,8 @@ class RecoveryActionServiceTest {
     private DispatchService dispatchService;
     @Mock
     private BankHealthService bankHealthService;
+    @Mock
+    private MerchantSettingsService merchantSettingsService;
 
     @InjectMocks
     private RecoveryActionService recoveryActionService;
@@ -270,5 +272,94 @@ class RecoveryActionServiceTest {
         assertEquals(99900L, resp.getAmount());
         assertNotNull(resp.getMatchedRule());
         assertTrue(resp.getMatchedRule().contains("insufficient_funds"));
+    }
+
+    @Test
+    void testProcessFailure_AutoPilotEligible_AutoDispatches() {
+        classification.setCategory("insufficient_funds");
+        classification.setAutoRecoverable(false);
+
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
+                .thenReturn(new com.recovermandate.ai.DraftResult("Valid draft with no issues", "GEMINI"));
+        when(validationService.validateDraft(any(), any())).thenReturn(Optional.empty()); // passed validation
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> {
+            RecoveryAction a = i.getArgument(0);
+            a.setId(99L);
+            return a;
+        });
+
+        // Configure auto-pilot to be eligible
+        when(merchantSettingsService.isAutoPilotEligible(5000L, "insufficient_funds")).thenReturn(true);
+        com.recovermandate.dto.MerchantSettingsDto settingsDto = com.recovermandate.dto.MerchantSettingsDto.builder()
+                .defaultTone("gentle")
+                .autoPilotEnabled(true)
+                .build();
+        when(merchantSettingsService.getSettings()).thenReturn(settingsDto);
+
+        when(recoveryActionRepository.findById(99L)).thenReturn(Optional.of(
+                RecoveryAction.builder().id(99L).status("DRAFTED").build()
+        ));
+
+        com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
+                .id(1L).shortUrl("https://rzp.io/l/auto1").build();
+        when(paymentLinkService.createLinkForRecoveryAction(any())).thenReturn(link);
+
+        recoveryActionService.processFailure(classification);
+
+        verify(paymentLinkService).createLinkForRecoveryAction(any());
+        verify(dispatchService).dispatchRecovery(any(), eq("https://rzp.io/l/auto1"));
+        verify(auditService).log(eq("RECOVERY_ACTION"), eq(99L), eq("AUTO_PILOT_DISPATCHED"), eq("AUTO_PILOT"), contains("GENTLE"));
+    }
+
+    @Test
+    void testProcessFailure_ValidationFails_BlocksAndDoesNotAutoDispatch() {
+        classification.setCategory("insufficient_funds");
+        classification.setAutoRecoverable(false);
+
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
+                .thenReturn(new com.recovermandate.ai.DraftResult("Draft containing prohibited leak", "GEMINI"));
+        when(validationService.validateDraft(any(), any())).thenReturn(Optional.of("Blocked by keyword deny-list"));
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> {
+            RecoveryAction a = i.getArgument(0);
+            a.setId(99L);
+            return a;
+        });
+
+        recoveryActionService.processFailure(classification);
+
+        // Verification: Auto-pilot must NEVER be called if validation gate blocks the draft
+        verify(paymentLinkService, never()).createLinkForRecoveryAction(any());
+        verify(dispatchService, never()).dispatchRecovery(any(), any());
+        verify(auditService).log(eq("RECOVERY_ACTION"), eq(99L), eq("AI_DRAFT_BLOCKED"), eq("SYSTEM"), contains("Blocked by keyword deny-list"));
+    }
+
+    @Test
+    void testBatchApprove_ProcessesAllWithIsolation() {
+        RecoveryAction action1 = RecoveryAction.builder().id(1L).status("DRAFTED").build();
+        RecoveryAction action2 = RecoveryAction.builder().id(2L).status("DRAFTED").build();
+
+        when(recoveryActionRepository.findById(1L)).thenReturn(Optional.of(action1));
+        when(recoveryActionRepository.findById(2L)).thenThrow(new RuntimeException("DB Timeout on item 2"));
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> i.getArgument(0));
+
+        com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
+                .id(1L).shortUrl("https://rzp.io/l/batch1").build();
+        when(paymentLinkService.createLinkForRecoveryAction(any())).thenReturn(link);
+
+        com.recovermandate.dto.BatchApproveRequest req = com.recovermandate.dto.BatchApproveRequest.builder()
+                .actionIds(java.util.List.of(1L, 2L))
+                .tone("balanced")
+                .approvedBy("MERCHANT_BATCH")
+                .build();
+
+        com.recovermandate.dto.BatchApproveResponse response = recoveryActionService.batchApprove(req);
+
+        assertNotNull(response);
+        assertEquals(2, response.getTotalRequested());
+        assertEquals(1, response.getSuccessful());
+        assertEquals(1, response.getFailed());
+        assertEquals(java.util.List.of(1L), response.getApprovedActionIds());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(2L, response.getErrors().get(0).getActionId());
     }
 }

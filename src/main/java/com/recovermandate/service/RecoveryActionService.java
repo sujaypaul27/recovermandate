@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -32,6 +34,7 @@ public class RecoveryActionService {
     private final PaymentLinkService paymentLinkService;
     private final DispatchService dispatchService;
     private final BankHealthService bankHealthService;
+    private final MerchantSettingsService merchantSettingsService;
 
     @Transactional
     public void processFailure(FailureClassification classification) {
@@ -132,7 +135,86 @@ public class RecoveryActionService {
                     "SYSTEM",
                     "AI draft generated via " + (draftSource != null ? draftSource : "AI") + " and passed validation."
             );
+
+            // Auto-Pilot Execution Gate: only triggers for validated, unblocked drafts matching merchant policy
+            if (merchantSettingsService != null && merchantSettingsService.isAutoPilotEligible(event != null ? event.getAmount() : null, classification.getCategory())) {
+                String autoPilotTone = merchantSettingsService.getSettings().getDefaultTone();
+                log.info("Auto-Pilot rule matched for action {}. Auto-dispatching with tone: {}", savedAction.getId(), autoPilotTone);
+                try {
+                    approveAndDispatch(savedAction.getId(), "AUTO_PILOT", autoPilotTone, null);
+                    auditService.log(
+                            "RECOVERY_ACTION",
+                            savedAction.getId(),
+                            "AUTO_PILOT_DISPATCHED",
+                            "AUTO_PILOT",
+                            String.format("Action auto-dispatched by Merchant Auto-Pilot Policy (Amount: ₹%.2f, Tone: %s)",
+                                    (event != null && event.getAmount() != null ? event.getAmount() : 0L) / 100.0,
+                                    autoPilotTone.toUpperCase(java.util.Locale.ROOT))
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to auto-dispatch action {} via auto-pilot", savedAction.getId(), e);
+                }
+            }
         }
+    }
+
+    /**
+     * Batch approves and dispatches recovery actions with per-item error isolation.
+     */
+    public com.recovermandate.dto.BatchApproveResponse batchApprove(com.recovermandate.dto.BatchApproveRequest request) {
+        List<Long> actionIds = request != null ? request.getActionIds() : null;
+        if ((actionIds == null || actionIds.isEmpty()) && request != null && request.getMaxAmount() != null) {
+            List<RecoveryAction> drafted = recoveryActionRepository.findByStatus("DRAFTED");
+            actionIds = drafted.stream()
+                    .filter(a -> {
+                        if (a.getFailureClassification() == null || a.getFailureClassification().getPaymentEvent() == null) return false;
+                        Long amt = a.getFailureClassification().getPaymentEvent().getAmount();
+                        return amt != null && amt <= request.getMaxAmount();
+                    })
+                    .map(RecoveryAction::getId)
+                    .toList();
+        }
+
+        if (actionIds == null || actionIds.isEmpty()) {
+            return com.recovermandate.dto.BatchApproveResponse.builder()
+                    .totalRequested(0)
+                    .successful(0)
+                    .failed(0)
+                    .approvedActionIds(java.util.Collections.emptyList())
+                    .errors(java.util.Collections.emptyList())
+                    .build();
+        }
+
+        String approvedBy = (request.getApprovedBy() != null && !request.getApprovedBy().isBlank())
+                ? request.getApprovedBy()
+                : "MERCHANT_BATCH";
+        String tone = (request.getTone() != null && !request.getTone().isBlank())
+                ? request.getTone()
+                : (merchantSettingsService != null ? merchantSettingsService.getSettings().getDefaultTone() : "balanced");
+
+        List<Long> approvedIds = new java.util.ArrayList<>();
+        List<com.recovermandate.dto.BatchApproveResponse.BatchItemError> errors = new java.util.ArrayList<>();
+
+        for (Long id : actionIds) {
+            try {
+                approveAndDispatch(id, approvedBy, tone, null);
+                approvedIds.add(id);
+            } catch (Exception e) {
+                log.error("Failed to approve and dispatch action id in batch: {}", id, e);
+                errors.add(com.recovermandate.dto.BatchApproveResponse.BatchItemError.builder()
+                        .actionId(id)
+                        .errorMessage(e.getMessage() != null ? e.getMessage() : "Failed to approve and dispatch")
+                        .build());
+            }
+        }
+
+        return com.recovermandate.dto.BatchApproveResponse.builder()
+                .totalRequested(actionIds.size())
+                .successful(approvedIds.size())
+                .failed(errors.size())
+                .approvedActionIds(approvedIds)
+                .errors(errors)
+                .build();
     }
 
     private Customer extractCustomer(PaymentEvent event) {

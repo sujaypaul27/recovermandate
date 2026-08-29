@@ -21,11 +21,13 @@ import {
   ChevronDown,
   ChevronUp,
   Code2,
+  Zap,
 } from "lucide-react";
 import {
   fetchRecoveryActions,
   approveAndDispatchRecoveryAction,
   rejectRecoveryAction,
+  batchApproveRecoveryActions,
   type PageResponse,
   type RecoveryActionItem,
 } from "../lib/api";
@@ -98,6 +100,9 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
   const [data, setData] = useState<PageResponse<RecoveryActionItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [isBatchApproving, setIsBatchApproving] = useState(false);
+  const [batchTone, setBatchTone] = useState<"gentle" | "balanced" | "urgent">("balanced");
   const { toast } = useToast();
 
   const load = () => {
@@ -112,6 +117,13 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
     load();
   }, [refreshTrigger]);
 
+  const pendingActions = data?.content || [];
+  const safeActions = pendingActions.filter((a) => !a.amount || a.amount <= 250000);
+  const totalSafeValue = safeActions.reduce(
+    (acc, a) => acc + (a.amount ? a.amount / 100 : 499),
+    0
+  );
+
   const handleApprove = async (id: number, tone?: string, message?: string) => {
     try {
       await approveAndDispatchRecoveryAction(id, tone, message);
@@ -122,6 +134,31 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
       load();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleBatchApprove = async () => {
+    setIsBatchApproving(true);
+    try {
+      const resp = await batchApproveRecoveryActions({
+        actionIds: safeActions.map((a) => a.id),
+        tone: batchTone,
+        approvedBy: "HUMAN_BATCH",
+      });
+      toast({
+        title: "Batch Recovery Dispatched",
+        description: `Successfully approved & dispatched ${resp.successful} of ${resp.totalRequested} recovery actions.`,
+      });
+      setShowBatchModal(false);
+      load();
+    } catch (e: any) {
+      toast({
+        title: "Batch Approval Failed",
+        description: e.message || "Error processing batch request",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBatchApproving(false);
     }
   };
 
@@ -148,7 +185,105 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
             Review AI-drafted recovery communications, adjust tone parameters in real-time, and dispatch Razorpay hosted checkout links.
           </p>
         </div>
+
+        {safeActions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowBatchModal(true)}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold gap-2 shadow-lg shadow-emerald-500/20"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              Approve All Safe (&lt; ₹2,500) — {safeActions.length} Actions (₹{Math.round(totalSafeValue).toLocaleString("en-IN")})
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Batch Approval Confirmation Modal */}
+      <AnimatePresence>
+        {showBatchModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBatchModal(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-lg rounded-2xl bg-[#0C2340] border border-emerald-500/40 shadow-2xl p-6 z-10 text-white space-y-5"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Batch Approve &amp; Dispatch Safe Actions</h3>
+                  <p className="text-xs text-slate-300">Execute 1-click batch dunning for all low-risk pending recovery actions</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#02042B] border border-slate-700/60 space-y-2 text-xs font-mono">
+                <div className="flex justify-between text-slate-300 pb-2 border-b border-slate-800">
+                  <span>Qualifying Actions:</span>
+                  <span className="text-emerald-400 font-bold">{safeActions.length} Pending Mandates</span>
+                </div>
+                <div className="flex justify-between text-slate-300 pb-2 border-b border-slate-800">
+                  <span>Total Recoverable Value:</span>
+                  <span className="text-emerald-400 font-bold">₹{Math.round(totalSafeValue).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Safety Criteria:</span>
+                  <span className="text-blue-400 font-bold">Amount &lt;= ₹2,500 · PII Redacted</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Select Batch Dunning Tone</label>
+                <div className="grid grid-cols-3 gap-2 bg-[#02042B] p-1.5 rounded-xl border border-slate-700 text-xs font-bold">
+                  {(["gentle", "balanced", "urgent"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setBatchTone(t)}
+                      className={`py-1.5 rounded-lg capitalize transition-all ${
+                        batchTone === t
+                          ? "bg-emerald-600 text-white shadow-sm font-extrabold"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBatchModal(false)}
+                  className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleBatchApprove}
+                  disabled={isBatchApproving}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold gap-1.5 shadow-lg shadow-emerald-600/30"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isBatchApproving ? "animate-spin" : ""}`} />
+                  {isBatchApproving ? "Dispatching..." : `Confirm & Dispatch (${safeActions.length})`}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {loading ? (
         <div className="space-y-4">

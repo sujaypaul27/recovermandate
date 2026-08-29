@@ -55,6 +55,9 @@ class RecoverMandateApplicationTests {
     @MockBean
     private com.recovermandate.repository.BankHealthSnapshotRepository bankHealthSnapshotRepository;
 
+    @MockBean
+    private com.recovermandate.repository.MerchantSettingsRepository merchantSettingsRepository;
+
     @Test
     void contextLoads() {
     }

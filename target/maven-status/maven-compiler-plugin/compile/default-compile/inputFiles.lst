@@ -11,6 +11,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\DemoController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\GlobalExceptionHandler.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\HealthController.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\MerchantSettingsController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\PaymentEventController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\RecoveryActionController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\SearchController.java
@@ -18,11 +19,14 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\ApproveActionRequest.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\AuditChainVerificationResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\AuditLogResponse.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\BatchApproveRequest.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\BatchApproveResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\DashboardSummaryResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\DemoFailureSimulationRequest.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\DemoFailureSimulationResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\ErrorResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\HealthResponseDto.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\MerchantSettingsDto.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\PaymentEventResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\RecoveryActionResponse.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\dto\RejectActionRequest.java
@@ -33,6 +37,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\Cus
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\DispatchLog.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\FailureClassification.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\Merchant.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\MerchantSettings.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\PaymentEvent.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\PaymentLink.java
@@ -47,6 +52,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\DispatchLogRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\FailureClassificationRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\MerchantRepository.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\MerchantSettingsRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\PaymentEventRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\PaymentLinkRepository.java
@@ -65,6 +71,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\Ba
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\DashboardService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\DispatchService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\FailureClassificationService.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\MerchantSettingsService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\PaymentEventQueryService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\service\PaymentLinkService.java

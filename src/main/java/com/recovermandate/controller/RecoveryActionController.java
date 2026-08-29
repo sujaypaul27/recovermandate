@@ -43,6 +43,15 @@ public class RecoveryActionController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/batch-approve")
+    public ResponseEntity<com.recovermandate.dto.BatchApproveResponse> batchApprove(
+            @RequestBody(required = false) com.recovermandate.dto.BatchApproveRequest request) {
+        com.recovermandate.dto.BatchApproveResponse response = recoveryActionService.batchApprove(
+                request != null ? request : new com.recovermandate.dto.BatchApproveRequest()
+        );
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{id}/reject")
     public ResponseEntity<Void> rejectAction(@PathVariable Long id, @Valid @RequestBody RejectActionRequest request) {
         recoveryActionService.rejectAction(id, "HUMAN", request.getReason());

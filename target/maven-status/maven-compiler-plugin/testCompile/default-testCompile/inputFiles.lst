@@ -6,6 +6,7 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\DashboardControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\DemoControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\HealthControllerTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\MerchantSettingsControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\PaymentEventControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\RecoveryActionControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\SearchControllerTest.java
@@ -20,6 +21,7 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\Ba
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DashboardServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DispatchServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\FailureClassificationServiceTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\MerchantSettingsServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\PaymentLinkServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\RecoveryActionServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\RecoveryActionValidationServiceTest.java

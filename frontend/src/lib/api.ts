@@ -286,4 +286,54 @@ export async function exportRecoveryLedgerCsv(): Promise<void> {
   document.body.removeChild(a);
 }
 
+export interface MerchantSettings {
+  defaultTone: string;
+  autoPilotEnabled: boolean;
+  autoPilotMaxAmount: number; // in paise
+  autoPilotAllowedCategories: string;
+  businessDisplayName: string;
+  updatedAt?: string;
+}
+
+export async function fetchMerchantSettings(): Promise<MerchantSettings> {
+  const res = await fetch(`${API_BASE_URL}/settings`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch merchant settings");
+  return res.json();
+}
+
+export async function updateMerchantSettings(settings: Partial<MerchantSettings>): Promise<MerchantSettings> {
+  const res = await fetch(`${API_BASE_URL}/settings`, {
+    method: "PUT",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error("Failed to update merchant settings");
+  return res.json();
+}
+
+export interface BatchApproveResponse {
+  totalRequested: number;
+  successful: number;
+  failed: number;
+  approvedActionIds: number[];
+  errors: { actionId: number; errorMessage: string }[];
+}
+
+export async function batchApproveRecoveryActions(params: {
+  actionIds?: number[];
+  maxAmount?: number;
+  tone?: string;
+  approvedBy?: string;
+}): Promise<BatchApproveResponse> {
+  const res = await fetch(`${API_BASE_URL}/recovery-actions/batch-approve`, {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error("Failed to execute batch approval");
+  return res.json();
+}
+
 

@@ -12,12 +12,14 @@ import {
   User,
   Sparkles,
   Search,
+  Settings,
 } from "lucide-react";
 
 import { API_BASE_URL, API_KEY } from "./lib/api";
 import { useEventSource } from "./hooks/useEventSource";
 import { SystemHealthBanner, SystemHealthStatusDot } from "./components/SystemHealthBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { SettingsModal } from "./components/SettingsModal";
 import { RazorpayMark } from "./components/RazorpayLogo";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -31,6 +33,7 @@ export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // SSE Live Notification States
   const [hasNewFailedMandate, setHasNewFailedMandate] = useState(false);
@@ -159,6 +162,12 @@ export default function App() {
         onNavigate={handleTabChange}
       />
 
+      {/* Merchant Settings & Auto-Pilot Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
       {/* Background Mesh Layer */}
       <div className="gradient-mesh-bg" aria-hidden="true">
         <div className="ambient-blob ambient-blob-1" />
@@ -254,15 +263,26 @@ export default function App() {
         {/* Main Content Area */}
         <main className="app-main">
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
-            {/* Top Bar (Theme Toggle & RecoverMandate Switch) */}
+            {/* Top Bar (Theme Toggle, Settings & RecoverMandate Switch) */}
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                   className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
                   aria-label="Toggle theme"
+                  title="Toggle Light/Dark Theme"
                 >
                   {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-700/60"
+                  aria-label="Merchant Auto-Pilot Settings"
+                  title="Configure Merchant Dunning & Auto-Pilot Settings"
+                >
+                  <Settings className="w-4 h-4 text-[#3395FF]" />
+                  <span className="hidden sm:inline">Settings</span>
                 </button>
               </div>
 
