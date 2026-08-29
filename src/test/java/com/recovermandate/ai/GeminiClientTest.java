@@ -36,11 +36,11 @@ class GeminiClientTest {
         when(heuristicFallbackEngine.generateTemplate(eq("insufficient_funds"), eq(49900L), eq("INR")))
                 .thenReturn("Dear Customer,\n\nFallback draft");
 
-        String draft = geminiClient.generateDraft("John Doe", 49900L, "INR", "insufficient_funds", 2);
+        DraftResult draft = geminiClient.generateDraft("John Doe", 49900L, "INR", "insufficient_funds", 2);
 
         assertNotNull(draft);
-        assertEquals("Dear Customer,\n\nFallback draft", draft);
-        assertEquals("HEURISTIC", geminiClient.getLastDraftSource());
+        assertEquals("Dear Customer,\n\nFallback draft", draft.message());
+        assertEquals("HEURISTIC", draft.source());
         verify(heuristicFallbackEngine).generateTemplate("insufficient_funds", 49900L, "INR");
     }
 
@@ -50,7 +50,7 @@ class GeminiClientTest {
         when(heuristicFallbackEngine.generateTemplate(eq("technical_decline"), eq(10000L), eq("INR")))
                 .thenReturn("Dear Customer,\n\nTechnical fallback");
 
-        String draft = geminiClient.generateDraftFallback(
+        DraftResult draft = geminiClient.generateDraftFallback(
                 "Sensitive Customer Name",
                 10000L,
                 "INR",
@@ -60,7 +60,7 @@ class GeminiClientTest {
         );
 
         assertNotNull(draft);
-        assertEquals("HEURISTIC", geminiClient.getLastDraftSource());
-        assertEquals("Dear Customer,\n\nTechnical fallback", draft);
+        assertEquals("HEURISTIC", draft.source());
+        assertEquals("Dear Customer,\n\nTechnical fallback", draft.message());
     }
 }

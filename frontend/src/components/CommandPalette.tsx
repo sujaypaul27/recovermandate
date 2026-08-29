@@ -174,7 +174,13 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
 
           {/* Footer bar */}
           <div className="px-4 py-2.5 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between font-mono">
-            <span>Tip: Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">K</kbd> anywhere</span>
+            <span>
+              Tip: Press{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                {typeof window !== "undefined" && (/Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac/i.test(navigator.userAgent || "")) ? "⌘" : "Ctrl"}
+              </kbd>{" "}
+              + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">K</kbd> anywhere
+            </span>
             <span>RecoverMandate AI</span>
           </div>
         </motion.div>

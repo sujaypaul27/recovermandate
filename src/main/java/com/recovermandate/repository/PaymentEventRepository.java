@@ -28,4 +28,7 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long
 
     @org.springframework.data.jpa.repository.Query("SELECT fc.category, COUNT(fc) FROM FailureClassification fc GROUP BY fc.category")
     java.util.List<Object[]> countFailuresByCategory();
+
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM PaymentEvent p WHERE LOWER(p.razorpayPaymentId) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(p.eventType) LIKE LOWER(CONCAT('%', :query, '%'))")
+    java.util.List<PaymentEvent> searchEvents(@org.springframework.data.repository.query.Param("query") String query, org.springframework.data.domain.Pageable pageable);
 }

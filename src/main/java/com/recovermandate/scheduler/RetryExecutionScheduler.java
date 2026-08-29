@@ -4,7 +4,6 @@ import com.recovermandate.audit.AuditService;
 import com.recovermandate.entity.RetrySchedule;
 import com.recovermandate.repository.RetryScheduleRepository;
 import com.recovermandate.service.BankHealthService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -20,12 +20,29 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class RetryExecutionScheduler {
 
     private final RetryScheduleRepository retryScheduleRepository;
     private final BankHealthService bankHealthService;
     private final AuditService auditService;
+    private final Random random;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RetryExecutionScheduler(RetryScheduleRepository retryScheduleRepository,
+                                  BankHealthService bankHealthService,
+                                  AuditService auditService) {
+        this(retryScheduleRepository, bankHealthService, auditService, new Random());
+    }
+
+    public RetryExecutionScheduler(RetryScheduleRepository retryScheduleRepository,
+                                  BankHealthService bankHealthService,
+                                  AuditService auditService,
+                                  Random random) {
+        this.retryScheduleRepository = retryScheduleRepository;
+        this.bankHealthService = bankHealthService;
+        this.auditService = auditService;
+        this.random = random != null ? random : new Random();
+    }
 
     @Scheduled(fixedDelay = 60000)
     @Transactional
@@ -62,26 +79,57 @@ public class RetryExecutionScheduler {
                                 bankCode)
                 );
             } else {
-                log.info("Executing retry id={} (attempt #{}) for bank {} (health: {})",
-                        retry.getId(), retry.getAttemptNumber(), bankCode, health);
+                // Determine simulated failure rate based on bank health
+                double failureRate;
+                if ("DEGRADED".equalsIgnoreCase(health)) {
+                    failureRate = 0.65; // 65% failure rate for degraded banks
+                } else if ("HEALTHY".equalsIgnoreCase(health)) {
+                    failureRate = 0.30; // ~30% standard failure rate
+                } else {
+                    failureRate = 0.50; // default 50% for unknown state
+                }
 
-                String simulatedPaymentId = "pay_retry_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-                retry.setResult("SUCCESS");
-                retry.setExecutedAt(Instant.now());
-                retry.setRazorpayRetryPaymentId(simulatedPaymentId);
-                retryScheduleRepository.save(retry);
+                boolean isFailure = random.nextDouble() < failureRate;
 
-                auditService.log(
-                        "RETRY_SCHEDULE",
-                        retry.getId(),
-                        "RETRY_EXECUTED_SUCCESS",
-                        "SYSTEM",
-                        String.format("Executed retry attempt #%d with simulated retry payment ID %s (bank: %s, health: %s)",
-                                retry.getAttemptNumber(),
-                                simulatedPaymentId,
-                                bankCode,
-                                health)
-                );
+                if (isFailure) {
+                    log.warn("Simulated retry failure for id={} (attempt #{}) for bank {} (health: {})",
+                            retry.getId(), retry.getAttemptNumber(), bankCode, health);
+                    retry.setResult("FAILED");
+                    retry.setExecutedAt(Instant.now());
+                    retryScheduleRepository.save(retry);
+
+                    auditService.log(
+                            "RETRY_SCHEDULE",
+                            retry.getId(),
+                            "RETRY_EXECUTED_FAILED",
+                            "SYSTEM",
+                            String.format("Executed retry attempt #%d with FAILED outcome against bank %s (health: %s)",
+                                    retry.getAttemptNumber(),
+                                    bankCode,
+                                    health)
+                    );
+                } else {
+                    log.info("Executing retry id={} (attempt #{}) successfully for bank {} (health: {})",
+                            retry.getId(), retry.getAttemptNumber(), bankCode, health);
+
+                    String simulatedPaymentId = "pay_retry_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+                    retry.setResult("SUCCESS");
+                    retry.setExecutedAt(Instant.now());
+                    retry.setRazorpayRetryPaymentId(simulatedPaymentId);
+                    retryScheduleRepository.save(retry);
+
+                    auditService.log(
+                            "RETRY_SCHEDULE",
+                            retry.getId(),
+                            "RETRY_EXECUTED_SUCCESS",
+                            "SYSTEM",
+                            String.format("Executed retry attempt #%d with simulated retry payment ID %s (bank: %s, health: %s)",
+                                    retry.getAttemptNumber(),
+                                    simulatedPaymentId,
+                                    bankCode,
+                                    health)
+                    );
+                }
             }
         }
     }

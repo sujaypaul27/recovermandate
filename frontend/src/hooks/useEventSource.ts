@@ -46,6 +46,8 @@ export function useEventSource(url: string, onEvent?: SseEventHandler) {
         eventSource.addEventListener("classification.complete", handleIncoming("classification.complete"));
         eventSource.addEventListener("draft.generated", handleIncoming("draft.generated"));
         eventSource.addEventListener("action.approved", handleIncoming("action.approved"));
+        eventSource.addEventListener("recovery.dispatched", handleIncoming("recovery.dispatched"));
+        eventSource.addEventListener("recovery.completed", handleIncoming("recovery.completed"));
 
         // Fallback default message listener
         eventSource.onmessage = handleIncoming("message");

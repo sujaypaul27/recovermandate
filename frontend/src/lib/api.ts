@@ -23,6 +23,69 @@ export interface DashboardSummary {
   recoveryRate: number;
 }
 
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface PaymentEventItem {
+  id: number;
+  razorpayPaymentId: string;
+  razorpaySubscriptionId?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  eventType: string;
+  amount: number;
+  currency?: string;
+  status?: string;
+  failureReasonCode?: string;
+  failureCategory?: string;
+  autoRecoverable?: boolean;
+  retryCount?: number;
+  createdAt?: string;
+  classificationCategory?: string;
+  classificationStatus?: string;
+  errorReason?: string;
+}
+
+export interface RecoveryActionItem {
+  id: number;
+  failureClassificationId?: number;
+  paymentEventId?: number;
+  razorpayPaymentId?: string;
+  category?: string;
+  amount?: number;
+  customerEmail?: string;
+  aiDraftMessage?: string;
+  draftSource?: string;
+  paymentLinkUrl?: string;
+  status: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  sentAt?: string;
+  createdAt: string;
+  actor: string;
+  tone?: string;
+}
+
+export interface AuditLogItem {
+  id: number;
+  entityType: string;
+  entityId: number;
+  action: string;
+  actor: string;
+  details: string;
+  traceId?: string;
+  timestamp: string;
+  checksum: string;
+  aiModelUsed?: string;
+}
+
 export async function fetchDashboardSummary(): Promise<DashboardSummary> {
   const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
     headers: getHeaders(),
@@ -31,7 +94,7 @@ export async function fetchDashboardSummary(): Promise<DashboardSummary> {
   return res.json();
 }
 
-export async function fetchPaymentEvents(page = 0, size = 20, status?: string) {
+export async function fetchPaymentEvents(page = 0, size = 20, status?: string): Promise<PageResponse<PaymentEventItem>> {
   const url = new URL(`${API_BASE_URL}/payment-events`);
   url.searchParams.append("page", page.toString());
   url.searchParams.append("size", size.toString());
@@ -43,7 +106,7 @@ export async function fetchPaymentEvents(page = 0, size = 20, status?: string) {
   return res.json();
 }
 
-export async function fetchRecoveryActions(page = 0, size = 20, status?: string) {
+export async function fetchRecoveryActions(page = 0, size = 20, status?: string): Promise<PageResponse<RecoveryActionItem>> {
   const url = new URL(`${API_BASE_URL}/recovery-actions`);
   url.searchParams.append("page", page.toString());
   url.searchParams.append("size", size.toString());
@@ -55,7 +118,7 @@ export async function fetchRecoveryActions(page = 0, size = 20, status?: string)
   return res.json();
 }
 
-export async function fetchAuditLogs(page = 0, size = 20) {
+export async function fetchAuditLogs(page = 0, size = 20): Promise<PageResponse<AuditLogItem>> {
   const url = new URL(`${API_BASE_URL}/audit-log`);
   url.searchParams.append("page", page.toString());
   url.searchParams.append("size", size.toString());
@@ -73,6 +136,25 @@ export async function approveRecoveryAction(id: number) {
     if (res.status === 404) throw new Error("Recovery Action not found");
     if (res.status === 409) throw new Error("Recovery Action is not in DRAFTED state (Conflict)");
     throw new Error("Failed to approve recovery action");
+  }
+}
+
+export async function approveAndDispatchRecoveryAction(id: number, tone?: string, message?: string) {
+  const res = await fetch(`${API_BASE_URL}/recovery-actions/${id}/approve-and-dispatch`, {
+    method: "POST",
+    headers: getHeaders({
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({
+      tone: tone || "balanced",
+      message: message || null,
+      approvedBy: "HUMAN",
+    }),
+  });
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("Recovery Action not found");
+    if (res.status === 409) throw new Error("Recovery Action is not in DRAFTED state (Conflict)");
+    throw new Error("Failed to approve and dispatch recovery action");
   }
 }
 
@@ -124,4 +206,64 @@ export async function searchGlobal(query: string) {
     return [];
   }
 }
+
+export interface AuditChainVerification {
+  valid: boolean;
+  chainLength: number;
+  brokenAtId: number | null;
+  message: string;
+}
+
+export async function verifyAuditChain(): Promise<AuditChainVerification> {
+  const res = await fetch(`${API_BASE_URL}/audit-log/verify-chain`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to verify cryptographic audit chain");
+  return res.json();
+}
+
+export async function simulateFailure(params?: {
+  category?: string;
+  amount?: number;
+  customerName?: string;
+  customerEmail?: string;
+  bankCode?: string;
+}) {
+  const res = await fetch(`${API_BASE_URL}/demo/simulate-failure`, {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(params || {}),
+  });
+  if (!res.ok) throw new Error("Failed to simulate mandate failure");
+  return res.json();
+}
+
+export async function simulatePaymentPaid(params?: {
+  paymentLinkId?: string;
+  actionId?: number;
+  amount?: number;
+}) {
+  const url = new URL(`${API_BASE_URL}/demo/simulate-payment-paid`);
+  if (params?.paymentLinkId) url.searchParams.append("paymentLinkId", params.paymentLinkId);
+  if (params?.actionId) url.searchParams.append("actionId", params.actionId.toString());
+  if (params?.amount) url.searchParams.append("amount", params.amount.toString());
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to simulate payment link payment");
+  return res.json();
+}
+
+export async function simulateFullFlow(params?: { category?: string; amount?: number }) {
+  const res = await fetch(`${API_BASE_URL}/demo/simulate-full-flow`, {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(params || {}),
+  });
+  if (!res.ok) throw new Error("Failed to simulate end-to-end recovery flow");
+  return res.json();
+}
+
 

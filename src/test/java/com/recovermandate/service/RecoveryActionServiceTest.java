@@ -66,6 +66,26 @@ class RecoveryActionServiceTest {
     }
 
     @Test
+    void testProcessFailure_DuplicateActionExists_SkipsAndLogsAudit() {
+        classification.setAutoRecoverable(false);
+        RecoveryAction existing = new RecoveryAction();
+        existing.setId(99L);
+        when(recoveryActionRepository.findByFailureClassification(classification)).thenReturn(Optional.of(existing));
+
+        recoveryActionService.processFailure(classification);
+
+        verify(geminiClient, never()).generateDraft(any(), any(), any(), any(), anyInt());
+        verify(recoveryActionRepository, never()).save(any());
+        verify(auditService).log(
+                eq("FAILURE_CLASSIFICATION"),
+                eq(100L),
+                eq("DUPLICATE_RECOVERY_ACTION_SKIPPED"),
+                eq("SYSTEM"),
+                contains("id 100")
+        );
+    }
+
+    @Test
     void testProcessFailure_GeminiApiFails_LogsAuditAndSkipsSave() {
         classification.setAutoRecoverable(false);
         when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(null);
@@ -86,7 +106,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_DraftValid_SavesAsDrafted() {
         classification.setAutoRecoverable(false);
         String draft = "Valid draft message";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(draft);
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
         when(validationService.validateDraft(draft, 5000L)).thenReturn(Optional.empty());
 
         RecoveryAction mockSaved = new RecoveryAction();
@@ -100,6 +120,7 @@ class RecoveryActionServiceTest {
         
         RecoveryAction savedAction = actionCaptor.getValue();
         assertEquals("DRAFTED", savedAction.getStatus());
+        assertEquals("AI", savedAction.getDraftSource());
         assertEquals(draft, savedAction.getAiDraftMessage());
         assertEquals("SYSTEM", savedAction.getActor());
         assertNotNull(savedAction.getCreatedAt());
@@ -117,7 +138,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_DraftInvalid_SavesAsBlocked() {
         classification.setAutoRecoverable(false);
         String draft = "Invalid draft message with discount";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(draft);
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
         when(validationService.validateDraft(draft, 5000L)).thenReturn(Optional.of("Contains discount"));
 
         RecoveryAction mockSaved = new RecoveryAction();
@@ -146,8 +167,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_HeuristicFallback_RecordsHeuristicSource() {
         classification.setAutoRecoverable(false);
         String heuristicDraft = "Dear Customer,\n\nWe were unable to process your payment.";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(heuristicDraft);
-        when(geminiClient.getLastDraftSource()).thenReturn("HEURISTIC");
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(heuristicDraft, "HEURISTIC"));
         when(validationService.validateDraft(heuristicDraft, 5000L)).thenReturn(Optional.empty());
 
         RecoveryAction mockSaved = new RecoveryAction();

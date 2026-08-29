@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 import { fetchSystemHealth } from "../lib/api";
+import { RazorpayMark } from "./RazorpayLogo";
 
 interface HealthStatus {
   status: string;
@@ -58,23 +59,23 @@ export function SystemHealthBanner() {
         animate={{ opacity: 1, y: 0, height: "auto" }}
         exit={{ opacity: 0, y: -20, height: 0 }}
         transition={{ duration: 0.3 }}
-        className="w-full bg-amber-500/15 border-b border-amber-500/30 backdrop-blur-md px-4 py-2.5 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-medium flex items-center justify-between shadow-sm z-50"
+        className="w-full bg-[#02042B] border-b border-amber-500/40 backdrop-blur-md px-4 py-2.5 text-amber-200 text-xs sm:text-sm font-medium flex items-center justify-between shadow-lg z-50"
       >
         <div className="flex items-center gap-2.5 max-w-5xl mx-auto w-full">
-          <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-            <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
+          <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 border border-amber-500/30">
+            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
           </div>
           <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-            <span className="font-bold tracking-tight">
+            <span className="font-bold tracking-tight text-white">
               ⚡ AI Engine Degraded — Using Heuristic Fallback Templates
             </span>
-            <span className="text-[11px] text-amber-700/80 dark:text-amber-300/70 font-mono">
+            <span className="text-[11px] text-amber-300/80 font-mono">
               Resilience4j Circuit Breaker: {health?.geminiApi?.circuitBreakerState || "ACTIVE_FALLBACK"}
             </span>
           </div>
           <button
             onClick={() => setDismissed(true)}
-            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-white px-2 py-0.5 text-xs rounded hover:bg-amber-500/20 transition-colors"
+            className="text-amber-300 hover:text-white px-2.5 py-0.5 text-xs rounded-lg hover:bg-amber-500/20 transition-colors border border-amber-500/20"
           >
             Dismiss
           </button>
@@ -94,14 +95,15 @@ export function SystemHealthStatusDot() {
   const isHealthy = health?.status === "UP" && health?.geminiApi?.status !== "DEGRADED";
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 text-[11px]">
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#02042B] border border-[#3395FF]/30 text-[11px] shadow-sm">
+      <RazorpayMark className="w-3.5 h-3.5" />
       <span
         className={`w-2 h-2 rounded-full ${
-          isHealthy ? "bg-emerald-500 shadow-emerald-500/50 shadow-sm" : "bg-amber-500 animate-ping"
+          isHealthy ? "bg-emerald-400 shadow-emerald-500/50 shadow-sm animate-pulse" : "bg-amber-400 animate-ping"
         }`}
       />
-      <span className="font-semibold text-slate-700 dark:text-slate-300">
-        {isHealthy ? "Systems Operational" : "Degraded (Fallback Active)"}
+      <span className="font-semibold text-slate-200">
+        {isHealthy ? "Razorpay Gateway UP" : "Degraded (Fallback Active)"}
       </span>
     </div>
   );

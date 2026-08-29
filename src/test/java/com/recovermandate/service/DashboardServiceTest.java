@@ -80,7 +80,8 @@ class DashboardServiceTest {
         assertEquals(20L, summary.getDraftsGenerated());
         assertEquals(13L, summary.getDraftsApproved());
         assertEquals(5L, summary.getMessagesDispatched());
-        assertEquals(80L, summary.getPaymentsRecovered());
+        assertEquals(5L, summary.getPaymentsRecovered());
+        assertEquals(25.0, summary.getRecoveryRate());
         assertTrue(summary.getAvgResolutionTimeMinutes() > 0.0);
         assertEquals(12L, summary.getFailuresByCategory().get("insufficient_funds"));
         assertEquals(8L, summary.getFailuresByCategory().get("technical_decline"));

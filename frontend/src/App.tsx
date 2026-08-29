@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Zap,
   LayoutDashboard,
   FileX2,
   CheckSquare,
@@ -20,6 +18,8 @@ import { API_BASE_URL, API_KEY } from "./lib/api";
 import { useEventSource } from "./hooks/useEventSource";
 import { SystemHealthBanner, SystemHealthStatusDot } from "./components/SystemHealthBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { RazorpayMark } from "./components/RazorpayLogo";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { FailedMandatesPage } from "./pages/FailedMandatesPage";
@@ -38,6 +38,21 @@ export default function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const { toast } = useToast();
+
+  const isMac =
+    typeof window !== "undefined" &&
+    (/Mac|iPod|iPhone|iPad/.test(navigator.platform || "") || /Mac/i.test(navigator.userAgent || ""));
+
+  // Dynamic document title update per tab
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      dashboard: "Overview & ROI | RecoverMandate",
+      mandates: "Failed Mandates Log | RecoverMandate",
+      approvals: "AI Approval Queue | RecoverMandate",
+      audit: "Cryptographic Audit Trail | RecoverMandate",
+    };
+    document.title = titles[activeTab] || "RecoverMandate — Payment Recovery Intelligence";
+  }, [activeTab]);
 
   // Apply theme class to document
   useEffect(() => {
@@ -80,8 +95,18 @@ export default function App() {
         });
       } else if (eventType === "action.approved") {
         toast({
-          title: "Recovery Dispatched",
-          description: `Strategy #${data.actionId} approved. Recovery link sent.`,
+          title: "Recovery Approved",
+          description: `Strategy #${data.actionId} approved. Recovery link generated.`,
+        });
+      } else if (eventType === "recovery.dispatched") {
+        toast({
+          title: "Payment Link Dispatched",
+          description: `Razorpay recovery link dispatched to customer for action #${data.actionId}.`,
+        });
+      } else if (eventType === "recovery.completed") {
+        toast({
+          title: "🎉 Mandate Saved & Revenue Recovered!",
+          description: `Customer completed payment of ₹${((data.amount || 0) / 100).toLocaleString("en-IN")}. Revenue recovered!`,
         });
       }
     },
@@ -89,6 +114,13 @@ export default function App() {
   );
 
   // Connect to SSE Stream with API Key query parameter
+  // NOTE [ARCHITECTURAL LIMITATION]: Passing the API key in the query parameter (?apiKey=...) is an
+  // intentional design choice dictated by the W3C EventSource API specification, which does not allow
+  // custom HTTP request headers (such as 'X-API-Key') in standard browser EventSource implementations.
+  // This is a known browser API limitation rather than a security gap; ApiKeyAuthFilter supports both
+  // 'X-API-Key' headers and the 'apiKey' query parameter for this endpoint. In high-security production
+  // environments requiring strict header-only transport, an upgrade to WebSockets or ephemeral short-lived
+  // handshake tokens is the recommended path (out of scope for standard SSE streaming).
   const sseUrl = `${API_BASE_URL.replace("/api", "")}/api/stream/events?apiKey=${encodeURIComponent(API_KEY)}`;
   useEventSource(sseUrl, handleSseEvent);
 
@@ -138,18 +170,21 @@ export default function App() {
         {/* Sidebar Navigation */}
         <aside className="app-sidebar flex-col justify-between p-4">
           <div>
-            {/* Branding */}
+            {/* Official Razorpay Branding */}
             <div className="flex items-center gap-3 px-2 py-4 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
-                <Zap className="w-5 h-5 text-white" />
+              <div className="w-11 h-11 rounded-xl bg-[#0C2340] border border-[#3395FF]/40 flex items-center justify-center shadow-lg shadow-[#3395FF]/20 shrink-0">
+                <RazorpayMark className="w-6 h-6" />
               </div>
               <div className="hidden lg:block">
-                <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-none">
-                  RecoverMandate
-                </h1>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-500">Powered by</span>
-                  <span className="font-bold text-slate-800 dark:text-white tracking-wide text-xs">Razorpay</span>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-lg font-extrabold tracking-tight text-white leading-none">
+                    Recover<span className="text-[#3395FF]">Mandate</span>
+                  </h1>
+                </div>
+                <div className="flex items-center gap-1 mt-1.5">
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-[#93c5fd]/90">
+                    Powered by Razorpay Mandate Recovery Engine
+                  </span>
                 </div>
               </div>
             </div>
@@ -165,7 +200,7 @@ export default function App() {
                   <span>Search or Jump to...</span>
                 </div>
                 <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-[10px] font-mono text-slate-500 dark:text-slate-300">
-                  ⌘K
+                  {isMac ? "⌘K" : "Ctrl+K"}
                 </kbd>
               </button>
             </div>
@@ -201,47 +236,34 @@ export default function App() {
             </nav>
           </div>
 
-          <div className="hidden lg:block mt-auto space-y-3">
-            <SystemHealthStatusDot />
-
-            {/* Theme Toggle & User */}
-            <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="hidden xl:block">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white leading-none">Admin</p>
-                  <p className="text-xs text-slate-500 mt-1">Razorpay Co.</p>
-                </div>
+          {/* Footer User Status */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 hidden lg:block">
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                className="text-slate-500 hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white h-8 w-8 rounded-full shadow-sm"
-              >
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </Button>
+              <div className="flex-1 truncate">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">Ops Manager</p>
+                <p className="text-[10px] text-slate-400 truncate">Razorpay Admin</p>
+              </div>
+              <SystemHealthStatusDot />
             </div>
           </div>
         </aside>
 
         {/* Main Content Area */}
-        <main className="app-main p-4 sm:p-6 lg:p-8 xl:p-10">
-          <div className="max-w-6xl mx-auto space-y-8">
-            {/* Header / Context Actions */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  {navItems.find((i) => i.id === activeTab)?.label}
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {activeTab === "dashboard" && "Monitor and recover failed mandate payments."}
-                  {activeTab === "mandates" && "Live feed of caught Razorpay webhook events."}
-                  {activeTab === "approvals" && "Review AI-generated recovery strategies."}
-                  {activeTab === "audit" && "Cryptographically immutable system log."}
-                </p>
+        <main className="app-main">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
+            {/* Top Bar (Theme Toggle & RecoverMandate Switch) */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  aria-label="Toggle theme"
+                >
+                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
               </div>
 
               {/* RecoverMandate Toggle (Dashboard Tab) */}
@@ -290,21 +312,29 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* Dynamic View Content */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === "dashboard" && <DashboardPage isEnabled={isRecoverMandateEnabled} />}
-                {activeTab === "mandates" && <FailedMandatesPage refreshTrigger={refreshTrigger} />}
-                {activeTab === "approvals" && <ApprovalQueuePage refreshTrigger={refreshTrigger} />}
-                {activeTab === "audit" && <AuditLogPage refreshTrigger={refreshTrigger} />}
-              </motion.div>
-            </AnimatePresence>
+            {/* Dynamic View Content wrapped in ErrorBoundary */}
+            <ErrorBoundary>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeTab === "dashboard" && (
+                    <DashboardPage
+                      isEnabled={isRecoverMandateEnabled}
+                      refreshTrigger={refreshTrigger}
+                      onNavigate={handleTabChange}
+                    />
+                  )}
+                  {activeTab === "mandates" && <FailedMandatesPage refreshTrigger={refreshTrigger} />}
+                  {activeTab === "approvals" && <ApprovalQueuePage refreshTrigger={refreshTrigger} />}
+                  {activeTab === "audit" && <AuditLogPage refreshTrigger={refreshTrigger} />}
+                </motion.div>
+              </AnimatePresence>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

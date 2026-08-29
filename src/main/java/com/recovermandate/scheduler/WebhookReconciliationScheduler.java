@@ -75,16 +75,6 @@ public class WebhookReconciliationScheduler {
     }
 
     private String extractPaymentId(JsonNode root) {
-        JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
-        if (!paymentEntity.isMissingNode() && paymentEntity.hasNonNull("id")) {
-            return paymentEntity.get("id").asText();
-        }
-        if (root.hasNonNull("payment_id")) {
-            return root.get("payment_id").asText();
-        }
-        if (root.hasNonNull("id") && root.get("id").asText().startsWith("pay_")) {
-            return root.get("id").asText();
-        }
-        return null;
+        return com.recovermandate.util.WebhookPayloadUtils.extractPaymentId(root);
     }
 }

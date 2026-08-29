@@ -43,7 +43,35 @@ public class DispatchService {
             }
         }
 
-        String recipientEmail = customer != null && customer.getEmail() != null ? customer.getEmail() : "customer@example.com";
+        String recipientEmail = customer != null && customer.getEmail() != null && !customer.getEmail().isBlank()
+                ? customer.getEmail().trim()
+                : null;
+
+        if (recipientEmail == null) {
+            log.warn("Cannot dispatch recovery email for action id={}: missing customer email", action.getId());
+
+            DispatchLog failedLog = DispatchLog.builder()
+                    .recoveryAction(action)
+                    .channel("EMAIL")
+                    .recipient("UNKNOWN")
+                    .status("DISPATCH_FAILED")
+                    .errorDetail("missing customer email")
+                    .sentAt(Instant.now())
+                    .build();
+
+            DispatchLog savedLog = dispatchLogRepository.save(failedLog);
+
+            auditService.log(
+                    "RECOVERY_ACTION",
+                    action.getId(),
+                    "DISPATCH_FAILED",
+                    "SYSTEM",
+                    "Dispatch failed for action id " + action.getId() + ": missing customer email"
+            );
+
+            return savedLog;
+        }
+
         String maskedRecipient = maskEmail(recipientEmail);
 
         log.info("Dispatching recovery email to {} for action id={} with link {}",

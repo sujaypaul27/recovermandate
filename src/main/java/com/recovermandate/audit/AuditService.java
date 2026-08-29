@@ -32,6 +32,21 @@ public class AuditService {
      */
     private volatile String lastChecksum = "GENESIS";
 
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        try {
+            auditLogRepository.findTopByOrderByIdDesc().ifPresent(latest -> {
+                if (latest.getChecksum() != null && !latest.getChecksum().isBlank()) {
+                    this.lastChecksum = latest.getChecksum();
+                    log.info("Initialized AuditService hash chain from latest record id={}: checksum={}",
+                            latest.getId(), this.lastChecksum);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Could not initialize audit hash chain from repository on startup: {}", e.getMessage());
+        }
+    }
+
     /**
      * Records an audit log entry.
      *
@@ -105,6 +120,52 @@ public class AuditService {
 
     public String getLastChecksum() {
         return lastChecksum;
+    }
+
+    /**
+     * Walks the entire audit log table in chronological order, recomputing expected
+     * cryptographic SHA-256 hashes from the GENESIS seed to verify tamper resistance.
+     */
+    public com.recovermandate.dto.AuditChainVerificationResponse verifyChain() {
+        java.util.List<AuditLog> allLogs = auditLogRepository.findAll(
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "id")
+        );
+
+        String runningChecksum = "GENESIS";
+        long count = 0;
+
+        for (AuditLog audit : allLogs) {
+            String safeEntityType = audit.getEntityType() != null ? audit.getEntityType() : "UNKNOWN";
+            Long safeEntityId = audit.getEntityId() != null ? audit.getEntityId() : 0L;
+            String safeAction = audit.getAction() != null ? audit.getAction() : "UNKNOWN";
+            String safeActor = audit.getActor() != null ? audit.getActor() : "SYSTEM";
+            String timestampStr = audit.getCreatedAt() != null ? audit.getCreatedAt().toString() : "";
+
+            String expectedInput = runningChecksum + "|" + safeEntityType + "|" + safeEntityId + "|"
+                    + safeAction + "|" + safeActor + "|" + timestampStr;
+            String expectedChecksum = sha256(expectedInput);
+
+            if (!expectedChecksum.equalsIgnoreCase(audit.getChecksum())) {
+                log.warn("Audit chain cryptographic mismatch at record id={}: expected={}, actual={}",
+                        audit.getId(), expectedChecksum, audit.getChecksum());
+                return com.recovermandate.dto.AuditChainVerificationResponse.builder()
+                        .valid(false)
+                        .chainLength(count)
+                        .brokenAtId(audit.getId())
+                        .message("Cryptographic hash mismatch detected at audit record ID #" + audit.getId())
+                        .build();
+            }
+
+            runningChecksum = audit.getChecksum();
+            count++;
+        }
+
+        return com.recovermandate.dto.AuditChainVerificationResponse.builder()
+                .valid(true)
+                .chainLength(count)
+                .brokenAtId(null)
+                .message(String.format("Cryptographic hash chain verified successfully across %d audit record(s).", count))
+                .build();
     }
 
     private String sha256(String input) {

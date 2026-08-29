@@ -19,10 +19,10 @@ import java.util.List;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class RazorpayApiClient {
 
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
     
     @Value("${razorpay.api.key.id:}")
     private String keyId;
@@ -33,7 +33,15 @@ public class RazorpayApiClient {
     @Value("${razorpay.api.base-url:https://api.razorpay.com/v1}")
     private String baseUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    public RazorpayApiClient(
+            org.springframework.boot.web.client.RestTemplateBuilder restTemplateBuilder,
+            ObjectMapper objectMapper) {
+        this.restTemplate = restTemplateBuilder
+                .setConnectTimeout(java.time.Duration.ofSeconds(5))
+                .setReadTimeout(java.time.Duration.ofSeconds(10))
+                .build();
+        this.objectMapper = objectMapper;
+    }
 
     public List<String> fetchRecentFailedPaymentEvents(Instant since) {
         if (keyId.isEmpty() || keySecret.isEmpty()) {

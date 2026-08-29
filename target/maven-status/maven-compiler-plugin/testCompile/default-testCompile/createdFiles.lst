@@ -11,6 +11,7 @@ com\recovermandate\integration\AIValidationIntegrationTest.class
 com\recovermandate\service\DashboardServiceTest.class
 com\recovermandate\controller\RecoveryActionControllerTest.class
 com\recovermandate\service\RecoveryActionValidationServiceTest.class
+com\recovermandate\controller\DemoControllerTest.class
 com\recovermandate\service\WebhookServiceTest.class
 com\recovermandate\controller\HealthControllerTest.class
 com\recovermandate\service\FailureClassificationServiceTest$DetermineCategoryTests.class

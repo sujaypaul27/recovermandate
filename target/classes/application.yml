@@ -8,6 +8,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
+      # NOTE: update is intentional for demo/buildathon environment — would be validate/none in real production with migrations
       ddl-auto: update
     properties:
       hibernate:

@@ -39,10 +39,15 @@ public class DashboardService {
         long blockedDrafts = recoveryActionRepository.countByStatus("BLOCKED");
         long approvedDrafts = recoveryActionRepository.countByStatus("APPROVED");
         long dispatchedMessages = recoveryActionRepository.countByStatus("DISPATCHED");
+        long recoveredActions = recoveryActionRepository.countByStatus("RECOVERED");
         long totalDrafts = recoveryActionRepository.count();
 
+        // Failed PaymentEvents subsequently recovered (RecoveryAction status = RECOVERED or DISPATCHED as proxy)
+        // NOTE: Once RECOVERED status is fully written by webhook listener, update proxy to only count RECOVERED
+        long recoveredCount = recoveredActions > 0 ? recoveredActions : dispatchedMessages;
+
         double successRate = totalPayments > 0 ? ((double) successfulPayments / totalPayments) * 100.0 : 0.0;
-        double recoveryRate = failedCount > 0 ? Math.min(100.0, ((double) successfulPayments / failedCount) * 100.0) : 0.0;
+        double recoveryRate = failedCount > 0 ? Math.min(100.0, ((double) recoveredCount / failedCount) * 100.0) : 0.0;
 
         // Group failures by category
         Map<String, Long> failuresByCategory = new HashMap<>();
@@ -76,7 +81,7 @@ public class DashboardService {
                 .draftsGenerated(totalDrafts)
                 .draftsApproved(approvedDrafts + dispatchedMessages)
                 .messagesDispatched(dispatchedMessages)
-                .paymentsRecovered(successfulPayments)
+                .paymentsRecovered(recoveredCount)
                 .recoveryRate(Math.round(recoveryRate * 10.0) / 10.0)
                 .build();
     }

@@ -114,4 +114,22 @@ class BankHealthServiceTest {
         String health = bankHealthService.getBankHealth("HDFC");
         assertEquals("DEGRADED", health);
     }
+
+    @Test
+    @DisplayName("Should return single latest snapshot per distinct bank code")
+    void getLatestSnapshots_returnsSingleLatestPerBank() {
+        when(bankHealthSnapshotRepository.findDistinctBankCodes()).thenReturn(List.of("HDFC", "ICICI"));
+
+        BankHealthSnapshot hdfc = BankHealthSnapshot.builder().bankCode("HDFC").status("HEALTHY").build();
+        BankHealthSnapshot icici = BankHealthSnapshot.builder().bankCode("ICICI").status("DEGRADED").build();
+
+        when(bankHealthSnapshotRepository.findTopByBankCodeOrderByCreatedAtDesc("HDFC")).thenReturn(Optional.of(hdfc));
+        when(bankHealthSnapshotRepository.findTopByBankCodeOrderByCreatedAtDesc("ICICI")).thenReturn(Optional.of(icici));
+
+        List<BankHealthSnapshot> latest = bankHealthService.getLatestSnapshots();
+
+        assertNotNull(latest);
+        assertTrue(latest.contains(hdfc));
+        assertTrue(latest.contains(icici));
+    }
 }

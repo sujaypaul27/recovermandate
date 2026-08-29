@@ -30,7 +30,7 @@ class AuditServiceTest {
     @BeforeEach
     void setUp() {
         MDC.clear();
-        when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -92,5 +92,64 @@ class AuditServiceTest {
         assertEquals(aiModel, log.getAiModelUsed());
         assertEquals(promptHash, log.getAiPromptHash());
         assertNotNull(log.getChecksum());
+    }
+
+    @Test
+    @DisplayName("Should initialize lastChecksum from latest record in repository on init")
+    void init_loadsChecksumFromLatestRecord() {
+        AuditLog previous = AuditLog.builder()
+                .id(42L)
+                .checksum("prev_checksum_abc123")
+                .build();
+        when(auditLogRepository.findTopByOrderByIdDesc()).thenReturn(java.util.Optional.of(previous));
+
+        auditService.init();
+
+        assertEquals("prev_checksum_abc123", auditService.getLastChecksum());
+    }
+
+    @Test
+    @DisplayName("Should keep GENESIS if no previous audit log exists")
+    void init_keepsGenesisWhenEmpty() {
+        when(auditLogRepository.findTopByOrderByIdDesc()).thenReturn(java.util.Optional.empty());
+
+        auditService.init();
+
+        assertEquals("GENESIS", auditService.getLastChecksum());
+    }
+
+    @Test
+    @DisplayName("Should verify valid cryptographic audit chain")
+    void verifyChain_validChain() {
+        AuditLog log1 = auditService.log("PAYMENT_EVENT", 1L, "ACTION_1", "SYSTEM", "First entry");
+        AuditLog log2 = auditService.log("RECOVERY_ACTION", 2L, "ACTION_2", "HUMAN", "Second entry");
+
+        when(auditLogRepository.findAll(any(org.springframework.data.domain.Sort.class)))
+                .thenReturn(java.util.List.of(log1, log2));
+
+        com.recovermandate.dto.AuditChainVerificationResponse result = auditService.verifyChain();
+
+        assertTrue(result.isValid());
+        assertEquals(2L, result.getChainLength());
+        assertNull(result.getBrokenAtId());
+    }
+
+    @Test
+    @DisplayName("Should detect tampered cryptographic checksum in audit chain")
+    void verifyChain_tamperedChain() {
+        AuditLog log1 = auditService.log("PAYMENT_EVENT", 1L, "ACTION_1", "SYSTEM", "First entry");
+        AuditLog log2 = auditService.log("RECOVERY_ACTION", 2L, "ACTION_2", "HUMAN", "Second entry");
+
+        // Tamper with log2's checksum
+        log2.setChecksum("tampered_fake_checksum_0000000000000000000000000000000000000000");
+
+        when(auditLogRepository.findAll(any(org.springframework.data.domain.Sort.class)))
+                .thenReturn(java.util.List.of(log1, log2));
+
+        com.recovermandate.dto.AuditChainVerificationResponse result = auditService.verifyChain();
+
+        assertFalse(result.isValid());
+        assertEquals(1L, result.getChainLength()); // 1 entry verified before failure
+        assertEquals(log2.getId(), result.getBrokenAtId());
     }
 }

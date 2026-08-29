@@ -13,4 +13,7 @@ public interface BankHealthSnapshotRepository extends JpaRepository<BankHealthSn
     Optional<BankHealthSnapshot> findTopByBankCodeOrderByCreatedAtDesc(String bankCode);
 
     List<BankHealthSnapshot> findAllByOrderByCreatedAtDesc();
+
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT b.bankCode FROM BankHealthSnapshot b")
+    List<String> findDistinctBankCodes();
 }

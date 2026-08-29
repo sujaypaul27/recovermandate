@@ -14,10 +14,18 @@ import {
   Activity,
   Filter,
   Send,
-  Sparkles,
   PieChart,
+  Sparkles,
+  Play,
 } from "lucide-react";
-import { fetchDashboardSummary, type DashboardSummary } from "../lib/api";
+import {
+  fetchDashboardSummary,
+  simulateFailure,
+  simulatePaymentPaid,
+  simulateFullFlow,
+  type DashboardSummary,
+} from "../lib/api";
+import { RazorpayMark } from "../components/RazorpayLogo";
 
 // ─── Animation Variants ───────────────────────────────────────────
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
@@ -26,8 +34,8 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 30 } },
 };
 
-// ─── Count-Up Hooks ────────────────────────────────────────────────
-function useCountUp(target: number, duration = 1200) {
+// ─── Count-Up Components ──────────────────────────────────────────
+function CountUp({ target, duration = 1200 }: { target: number; duration?: number }) {
   const [count, setCount] = useState(0);
   const rafRef = useRef<number>(0);
 
@@ -43,10 +51,11 @@ function useCountUp(target: number, duration = 1200) {
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
   }, [target, duration]);
-  return count;
+
+  return <>{count.toLocaleString("en-IN")}</>;
 }
 
-function useCountUpDecimal(target: number, decimals = 1, duration = 1200) {
+function CountUpDecimal({ target, decimals = 1, duration = 1200 }: { target: number; decimals?: number; duration?: number }) {
   const [count, setCount] = useState(0);
   const rafRef = useRef<number>(0);
 
@@ -62,7 +71,8 @@ function useCountUpDecimal(target: number, decimals = 1, duration = 1200) {
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
   }, [target, duration]);
-  return count.toFixed(decimals);
+
+  return <>{count.toFixed(decimals)}</>;
 }
 
 // ─── Sparkline Component ──────────────────────────────────────────
@@ -100,22 +110,22 @@ function Sparkline({ colorClass, dataPoints }: { colorClass: string; dataPoints:
 // ─── Hero Story Component ─────────────────────────────────────────
 export function HeroStory() {
   return (
-    <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden mb-8 border-blue-500/20 shadow-xl">
+    <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden mb-8 border-[#3395FF]/30 bg-[#0C2340]/80 shadow-2xl">
       <div className="absolute -top-20 -right-20 p-8 opacity-10 pointer-events-none transform rotate-12">
-        <Zap className="w-96 h-96 text-blue-500" />
+        <Zap className="w-96 h-96 text-[#3395FF]" />
       </div>
       <div className="relative z-10 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 border border-blue-200 dark:border-blue-500/20">
-            <Sparkles className="w-3.5 h-3.5" /> Autonomous Recovery Engine
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#02042B] text-[#3395FF] text-xs font-bold uppercase tracking-wider mb-3.5 border border-[#3395FF]/40 shadow-md">
+            <RazorpayMark className="w-4 h-4" /> Powered by Razorpay Mandate Recovery Engine
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tight">
             Recover lost revenue from <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-300">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3395FF] via-cyan-400 to-indigo-400">
               mandate & recurring payment failures.
             </span>
           </h2>
-          <p className="text-slate-600 dark:text-slate-300 text-base sm:text-lg leading-relaxed mb-8 max-w-3xl">
+          <p className="text-slate-600 dark:text-slate-200 text-base sm:text-lg leading-relaxed mb-8 max-w-3xl font-medium">
             RecoverMandate connects directly to Razorpay webhooks. When a recurring mandate fails, our multi-layered AI
             categorizes the root cause, checks bank health, generates dynamic payment links, and initiates multi-channel recovery in under 5 minutes.
           </p>
@@ -310,11 +320,195 @@ function CategoryBreakdownChart({ data }: { data: Record<string, number> }) {
   );
 }
 
+// ─── Live Demo Simulator Component ────────────────────────────────
+function LiveDemoSimulator({
+  onSimulated,
+  onNavigate,
+}: {
+  onSimulated: () => void;
+  onNavigate?: (tab: string) => void;
+}) {
+  const [selectedCategory, setSelectedCategory] = useState("insufficient_funds");
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isFullFlowSimulating, setIsFullFlowSimulating] = useState(false);
+  const [lastResult, setLastResult] = useState<any>(null);
+  const [isPayingLink, setIsPayingLink] = useState(false);
+
+  const categories = [
+    { id: "insufficient_funds", label: "Insufficient Funds", bank: "HDFC", amount: 49900, badge: "AI Draft" },
+    { id: "technical_decline", label: "Technical Decline", bank: "SBI", amount: 89900, badge: "Auto-Retry" },
+    { id: "expired_mandate", label: "Expired Mandate", bank: "ICICI", amount: 149900, badge: "AI Draft" },
+    { id: "unknown", label: "Unknown Reason", bank: "AXIS", amount: 299000, badge: "Human Review" },
+  ];
+
+  const handleSimulateFailure = async () => {
+    setIsSimulating(true);
+    try {
+      const selected = categories.find((c) => c.id === selectedCategory);
+      const res = await simulateFailure({
+        category: selectedCategory,
+        amount: selected?.amount || 49900,
+        bankCode: selected?.bank,
+      });
+      setLastResult({ ...res, step: "FAILURE_INGESTED" });
+      onSimulated();
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleSimulatePaymentPaid = async () => {
+    if (!lastResult) return;
+    setIsPayingLink(true);
+    try {
+      const res = await simulatePaymentPaid({
+        actionId: lastResult.recoveryActionId,
+        amount: lastResult.amount,
+      });
+      setLastResult((prev: any) => ({ ...prev, ...res, step: "RECOVERED" }));
+      onSimulated();
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setIsPayingLink(false);
+    }
+  };
+
+  const handleSimulateFullFlow = async () => {
+    setIsFullFlowSimulating(true);
+    try {
+      const selected = categories.find((c) => c.id === selectedCategory);
+      const res = await simulateFullFlow({
+        category: selectedCategory,
+        amount: selected?.amount || 49900,
+      });
+      setLastResult({ ...res, step: "FULL_FLOW_COMPLETED" });
+      onSimulated();
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setIsFullFlowSimulating(false);
+    }
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-6 border-blue-500/30 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-cyan-500/5 shadow-xl relative overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Live Demo Simulator <span className="text-xs font-semibold text-blue-500 uppercase tracking-wider ml-1">Jury Fast-Track</span>
+            </h3>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Simulate real Razorpay mandate failures, observe real-time AI drafting, and test closed-loop recovery without mock credentials.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={handleSimulateFailure}
+            disabled={isSimulating || isFullFlowSimulating}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold border border-slate-300 dark:border-slate-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Play className={`w-3.5 h-3.5 text-blue-500 ${isSimulating ? "animate-spin" : ""}`} />
+            {isSimulating ? "Injecting Webhook..." : "1. Simulate Failure"}
+          </button>
+
+          <button
+            onClick={handleSimulateFullFlow}
+            disabled={isSimulating || isFullFlowSimulating}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-500/25 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Zap className={`w-3.5 h-3.5 text-amber-300 ${isFullFlowSimulating ? "animate-bounce" : ""}`} />
+            {isFullFlowSimulating ? "Simulating End-to-End..." : "🚀 Full 5-Stage Recovery (1-Click)"}
+          </button>
+        </div>
+      </div>
+
+      {/* Category Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1 shrink-0">Failure Scenario:</span>
+        {categories.map((c) => {
+          const isSelected = selectedCategory === c.id;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setSelectedCategory(c.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                isSelected
+                  ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                  : "bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60"
+              }`}
+            >
+              <span>{c.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                isSelected ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+              }`}>
+                {c.bank} · ₹{(c.amount / 100).toLocaleString("en-IN")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Live Simulation Banner / Quick Recovery Action */}
+      {lastResult && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3.5 pt-3.5 border-t border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="font-semibold text-slate-800 dark:text-slate-200">
+              {lastResult.step === "FULL_FLOW_COMPLETED"
+                ? "🎉 Complete 5-Stage Cycle Executed: Mandate failed → AI drafted → Dispatched → Customer paid → Revenue salvaged!"
+                : lastResult.step === "RECOVERED"
+                ? "✅ Customer Payment Intercepted: Payment link settled & revenue closed loop verified!"
+                : `⚡ Ingested ${lastResult.paymentId || "failure"} (${lastResult.category}) — AI draft generated & queued for human review.`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {lastResult.step === "FAILURE_INGESTED" && onNavigate && (
+              <>
+                <button
+                  onClick={() => onNavigate("approvals")}
+                  className="px-3 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/30 flex items-center gap-1"
+                >
+                  Review in Queue <ArrowRight className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleSimulatePaymentPaid}
+                  disabled={isPayingLink}
+                  className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1"
+                >
+                  <TrendingUp className="w-3 h-3" />
+                  {isPayingLink ? "Simulating..." : "Simulate Customer Payment"}
+                </button>
+              </>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 // ─── Recovery Funnel Component ─────────────────────────────────────
 function RecoveryFunnel({
   summary,
+  isRecoveredPulse,
 }: {
   summary: DashboardSummary;
+  isRecoveredPulse?: boolean;
 }) {
   const steps = [
     {
@@ -350,15 +544,16 @@ function RecoveryFunnel({
       count: summary.paymentsRecovered || 0,
       icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
       color: "from-emerald-500 to-emerald-400",
-      description: "Payment settled successfully",
+      description: `₹${Math.round(summary.recoveredAmount / 100).toLocaleString("en-IN")} settled`,
+      highlight: true,
     },
   ];
 
   const maxVal = Math.max(...steps.map((s) => s.count), 1);
 
   return (
-    <div className="glass-card rounded-2xl p-6 border-slate-200 dark:border-slate-700/60 shadow-lg">
-      <div className="flex items-center justify-between mb-6">
+    <div className="glass-card rounded-2xl p-6 border-slate-200 dark:border-slate-700/60 shadow-lg relative overflow-hidden">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Filter className="w-5 h-5 text-emerald-500" />
@@ -368,21 +563,37 @@ function RecoveryFunnel({
             Real-time pipeline progression from failure detection to revenue recovery
           </p>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
-          <Activity className="w-3.5 h-3.5" /> {summary.recoveryRate}% Recovery Rate
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
+            <Activity className="w-3.5 h-3.5" /> {summary.recoveryRate}% Recovery Rate
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {steps.map((step, idx) => {
           const widthPct = Math.max(15, Math.round((step.count / maxVal) * 100));
+          const isStep5 = idx === 4;
 
           return (
-            <div
+            <motion.div
               key={step.label}
-              className="relative p-4 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex flex-col justify-between shadow-sm overflow-hidden"
+              animate={isStep5 && isRecoveredPulse ? { scale: [1, 1.04, 1] } : {}}
+              transition={{ duration: 0.8, repeat: isRecoveredPulse ? 3 : 0 }}
+              className={`relative p-4 rounded-xl border flex flex-col justify-between shadow-sm overflow-hidden transition-all duration-300 ${
+                isStep5
+                  ? `bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-500/10 dark:border-emerald-500/40 ${
+                      isRecoveredPulse ? "ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/30" : ""
+                    }`
+                  : "bg-white/60 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/50"
+              }`}
             >
-              <div className="flex items-center justify-between mb-2">
+              {/* Pulsing Highlight Overlay for Step 5 */}
+              {isStep5 && isRecoveredPulse && (
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-emerald-400/20 via-teal-400/20 to-emerald-400/20 animate-pulse" />
+              )}
+
+              <div className="flex items-center justify-between mb-2 relative z-10">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
                   {step.icon}
                   {step.label}
@@ -390,16 +601,21 @@ function RecoveryFunnel({
                 <span className="text-xs font-semibold text-slate-400">Step {idx + 1}</span>
               </div>
 
-              <div className="my-2">
-                <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+              <div className="my-2 relative z-10">
+                <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight flex items-baseline gap-1.5">
                   {step.count}
+                  {isStep5 && (
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      salvaged
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                   {step.description}
                 </div>
               </div>
 
-              <div className="w-full h-2 bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden mt-3">
+              <div className="w-full h-2 bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden mt-3 relative z-10">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${widthPct}%` }}
@@ -407,7 +623,7 @@ function RecoveryFunnel({
                   className={`h-full rounded-full bg-gradient-to-r ${step.color}`}
                 />
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -439,14 +655,33 @@ function ErrorState({ message }: { message: string }) {
 }
 
 // ─── Main Dashboard Page Component ────────────────────────────────
-export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
+export function DashboardPage({
+  isEnabled,
+  refreshTrigger,
+  onNavigate,
+}: {
+  isEnabled: boolean;
+  refreshTrigger?: number;
+  onNavigate?: (tab: string) => void;
+}) {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isRecoveredPulse, setIsRecoveredPulse] = useState(false);
+  const prevRecoveredRef = useRef<number>(0);
 
   const refreshData = () => {
     fetchDashboardSummary()
-      .then(setData)
+      .then((res) => {
+        if (res && res.paymentsRecovered > prevRecoveredRef.current) {
+          setIsRecoveredPulse(true);
+          setTimeout(() => setIsRecoveredPulse(false), 4000);
+        }
+        if (res) {
+          prevRecoveredRef.current = res.paymentsRecovered;
+        }
+        setData(res);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -456,6 +691,10 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
     const interval = setInterval(refreshData, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshTrigger]);
 
   if (loading) return <GlassSkeletons count={4} type="card" />;
   if (error) return <ErrorState message={error} />;
@@ -488,6 +727,9 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
     <div className="space-y-8 pb-12">
       <HeroStory />
 
+      {/* Live Demo Simulator Bar */}
+      <LiveDemoSimulator onSimulated={refreshData} onNavigate={onNavigate} />
+
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
         {/* Impact Banner */}
         <AnimatePresence mode="wait">
@@ -519,7 +761,11 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
           <motion.div variants={fadeUp}>
             <KPICard
               title="Recovery Rate"
-              displayValue={`${useCountUpDecimal(isEnabled ? safeData.recoveryRate : 0)}%`}
+              displayValue={
+                <>
+                  <CountUpDecimal target={isEnabled ? safeData.recoveryRate : 0} decimals={1} />%
+                </>
+              }
               subtitle={`${safeData.paymentsRecovered} payments salvaged`}
               icon={<TrendingUp className={`w-5 h-5 ${isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />}
               glowClass={isEnabled ? "glow-emerald" : "opacity-75 saturate-0"}
@@ -532,7 +778,11 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
           <motion.div variants={fadeUp}>
             <KPICard
               title="Mean Time to Resolve (MTTR)"
-              displayValue={`${useCountUpDecimal(safeData.avgResolutionTimeMinutes, 1)}m`}
+              displayValue={
+                <>
+                  <CountUpDecimal target={safeData.avgResolutionTimeMinutes} decimals={1} />m
+                </>
+              }
               subtitle="From failure to dispatch"
               icon={<Clock className={`w-5 h-5 ${isEnabled ? "text-blue-600 dark:text-blue-400" : "text-slate-400"}`} />}
               glowClass={isEnabled ? "glow-blue" : "opacity-75 saturate-0"}
@@ -548,7 +798,7 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
               displayValue={
                 <span className="flex items-center">
                   <IndianRupee className="w-7 h-7 -mr-1" />
-                  {useCountUp(isEnabled ? recoveredInRupees : 0).toLocaleString("en-IN")}
+                  <CountUp target={isEnabled ? recoveredInRupees : 0} />
                 </span>
               }
               subtitle="Recovered subscription revenue"
@@ -563,7 +813,7 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
           <motion.div variants={fadeUp}>
             <KPICard
               title="Pending Action Queue"
-              displayValue={useCountUp(isEnabled ? safeData.pendingApprovalsCount : 0)}
+              displayValue={<CountUp target={isEnabled ? safeData.pendingApprovalsCount : 0} />}
               subtitle={`${safeData.blockedDraftsCount} drafts in guardrail hold`}
               icon={<AlertTriangle className={`w-5 h-5 ${isEnabled ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`} />}
               glowClass={isEnabled ? "glow-amber" : "opacity-75 saturate-0"}
@@ -576,7 +826,7 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
 
         {/* Recovery Funnel */}
         <motion.div variants={fadeUp}>
-          <RecoveryFunnel summary={safeData} />
+          <RecoveryFunnel summary={safeData} isRecoveredPulse={isRecoveredPulse} />
         </motion.div>
 
         {/* Category Breakdown */}
@@ -587,3 +837,4 @@ export function DashboardPage({ isEnabled }: { isEnabled: boolean }) {
     </div>
   );
 }
+

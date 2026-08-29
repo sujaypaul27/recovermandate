@@ -48,6 +48,21 @@ class RecoveryActionControllerTest {
     }
 
     @Test
+    void approveAndDispatch_withTone_success_returnsOk() throws Exception {
+        com.recovermandate.dto.ApproveActionRequest request = com.recovermandate.dto.ApproveActionRequest.builder()
+                .tone("urgent")
+                .message("Custom urgent message")
+                .approvedBy("OPS_USER")
+                .build();
+
+        mockMvc.perform(post("/api/recovery-actions/1/approve-and-dispatch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        verify(recoveryActionService).approveAndDispatch(eq(1L), eq("OPS_USER"), eq("urgent"), eq("Custom urgent message"));
+    }
+
+    @Test
     void approveAction_notFound_returns404() throws Exception {
         doThrow(new EntityNotFoundException("Not found")).when(recoveryActionService).approveAction(1L, "HUMAN");
         

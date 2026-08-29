@@ -54,7 +54,7 @@ class FailureClassificationIntegrationTest {
     void testUnknownFailureReason_RemainsVisibleForHumanReview() {
         // Mock Gemini to return a valid draft so it goes to DRAFTED (visible for review)
         when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
-                .thenReturn("This is a valid draft asking for 999.00 payment.");
+                .thenReturn(new com.recovermandate.ai.DraftResult("This is a valid draft asking for 999.00 payment.", "AI"));
 
         String payload = """
                 {

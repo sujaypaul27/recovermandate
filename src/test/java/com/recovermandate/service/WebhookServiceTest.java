@@ -3,6 +3,7 @@ package com.recovermandate.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -63,6 +64,12 @@ class WebhookServiceTest {
     @Mock
     private RetrySchedulerService retrySchedulerService;
 
+    @Mock
+    private com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
+
+    @Mock
+    private com.recovermandate.repository.RecoveryActionRepository recoveryActionRepository;
+
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
 
@@ -80,7 +87,9 @@ class WebhookServiceTest {
                 retrySchedulerService,
                 auditService,
                 sseService,
-                objectMapper
+                objectMapper,
+                paymentLinkRepository,
+                recoveryActionRepository
         );
     }
 
@@ -499,5 +508,99 @@ class WebhookServiceTest {
         assertNotNull(result);
         assertEquals(999L, result.getId());
         verify(paymentEventRepository).save(any(PaymentEvent.class));
+    }
+
+    @Test
+    @DisplayName("Should handle payment_link.paid event and mark RecoveryAction as RECOVERED")
+    void handleVerifiedEvent_paymentLinkPaid_marksRecovered() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment_link.paid",
+                  "payload": {
+                    "payment_link": {
+                      "entity": {
+                        "id": "plink_test_123",
+                        "amount": 75000,
+                        "status": "paid"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        com.recovermandate.entity.RecoveryAction action = com.recovermandate.entity.RecoveryAction.builder()
+                .id(42L)
+                .status("DISPATCHED")
+                .build();
+
+        com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
+                .id(10L)
+                .razorpayLinkId("plink_test_123")
+                .amount(75000L)
+                .status("CREATED")
+                .recoveryAction(action)
+                .build();
+
+        when(paymentLinkRepository.findByRazorpayLinkId("plink_test_123")).thenReturn(Optional.of(link));
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(555L);
+            return pe;
+        });
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(result);
+        assertEquals("PAID", link.getStatus());
+        assertNotNull(link.getPaidAt());
+        assertEquals("RECOVERED", action.getStatus());
+
+        verify(paymentLinkRepository).save(link);
+        verify(recoveryActionRepository).save(action);
+        verify(auditService).log(eq("RECOVERY_ACTION"), eq(42L), eq("PAYMENT_RECOVERED"), eq("SYSTEM"), anyString());
+        verify(sseService).broadcast(eq("recovery.completed"), argThat((java.util.Map<String, Object> map) ->
+                map.containsKey("actionId") && Long.valueOf(75000L).equals(map.get("amount"))
+        ));
+    }
+
+    @Test
+    @DisplayName("Should handle payment_link.expired event and mark PaymentLink as EXPIRED")
+    void handleVerifiedEvent_paymentLinkExpired_marksExpired() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment_link.expired",
+                  "payload": {
+                    "payment_link": {
+                      "entity": {
+                        "id": "plink_expired_999",
+                        "status": "expired"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
+                .id(20L)
+                .razorpayLinkId("plink_expired_999")
+                .amount(50000L)
+                .status("CREATED")
+                .build();
+
+        when(paymentLinkRepository.findByRazorpayLinkId("plink_expired_999")).thenReturn(Optional.of(link));
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(666L);
+            return pe;
+        });
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(result);
+        assertEquals("EXPIRED", link.getStatus());
+        verify(paymentLinkRepository).save(link);
+        verify(auditService).log(eq("PAYMENT_LINK"), eq(20L), eq("PAYMENT_LINK_EXPIRED"), eq("SYSTEM"), anyString());
     }
 }

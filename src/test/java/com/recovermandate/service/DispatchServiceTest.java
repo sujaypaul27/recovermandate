@@ -72,4 +72,37 @@ class DispatchServiceTest {
 
         verify(sseService).broadcast(eq("recovery.dispatched"), anyMap());
     }
+
+    @Test
+    @DisplayName("Should mark DISPATCH_FAILED and skip sending when customer email is missing")
+    void dispatchRecovery_missingEmail_fails() {
+        PaymentEvent event = new PaymentEvent();
+        event.setSubscription(null); // No subscription -> no customer -> no email
+
+        FailureClassification classification = new FailureClassification();
+        classification.setPaymentEvent(event);
+
+        RecoveryAction action = new RecoveryAction();
+        action.setId(11L);
+        action.setFailureClassification(classification);
+
+        when(dispatchLogRepository.save(any(DispatchLog.class))).thenAnswer(i -> i.getArgument(0));
+
+        DispatchLog log = dispatchService.dispatchRecovery(action, "https://rzp.io/l/noEmail");
+
+        assertNotNull(log);
+        assertEquals("DISPATCH_FAILED", log.getStatus());
+        assertEquals("UNKNOWN", log.getRecipient());
+        assertEquals("missing customer email", log.getErrorDetail());
+
+        verify(auditService).log(
+                eq("RECOVERY_ACTION"),
+                eq(11L),
+                eq("DISPATCH_FAILED"),
+                eq("SYSTEM"),
+                contains("missing customer email")
+        );
+
+        verify(sseService, never()).broadcast(anyString(), any());
+    }
 }

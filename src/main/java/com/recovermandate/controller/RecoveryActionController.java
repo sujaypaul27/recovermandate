@@ -26,8 +26,20 @@ public class RecoveryActionController {
     }
 
     @PostMapping("/{id}/approve-and-dispatch")
-    public ResponseEntity<Void> approveAndDispatch(@PathVariable Long id) {
-        recoveryActionService.approveAndDispatch(id, "HUMAN");
+    public ResponseEntity<Void> approveAndDispatch(
+            @PathVariable Long id,
+            @RequestBody(required = false) com.recovermandate.dto.ApproveActionRequest request) {
+        String approvedBy = (request != null && request.getApprovedBy() != null && !request.getApprovedBy().isBlank())
+                ? request.getApprovedBy()
+                : "HUMAN";
+        String tone = (request != null) ? request.getTone() : null;
+        String message = (request != null) ? request.getMessage() : null;
+
+        if (tone != null || message != null) {
+            recoveryActionService.approveAndDispatch(id, approvedBy, tone, message);
+        } else {
+            recoveryActionService.approveAndDispatch(id, approvedBy);
+        }
         return ResponseEntity.ok().build();
     }
 

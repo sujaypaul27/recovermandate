@@ -77,7 +77,7 @@ class AIValidationIntegrationTest {
 
         // Mock Gemini returning wrong amount in draft (50.00 instead of 500.00)
         when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
-                .thenReturn("Please pay $50.00 to resolve your failure.");
+                .thenReturn(new com.recovermandate.ai.DraftResult("Please pay $50.00 to resolve your failure.", "AI"));
 
         recoveryActionService.processFailure(classification);
 
@@ -111,7 +111,7 @@ class AIValidationIntegrationTest {
 
         // Mock Gemini returning denylist language (discount)
         when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
-                .thenReturn("Please pay 100.00. We will give you a discount if you pay now.");
+                .thenReturn(new com.recovermandate.ai.DraftResult("Please pay 100.00. We will give you a discount if you pay now.", "AI"));
 
         recoveryActionService.processFailure(classification);
 

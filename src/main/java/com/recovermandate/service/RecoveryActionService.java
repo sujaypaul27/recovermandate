@@ -1,5 +1,6 @@
 package com.recovermandate.service;
 
+import com.recovermandate.ai.DraftResult;
 import com.recovermandate.ai.GeminiClient;
 import com.recovermandate.audit.AuditService;
 import com.recovermandate.entity.Customer;
@@ -41,9 +42,17 @@ public class RecoveryActionService {
         PaymentEvent event = classification.getPaymentEvent();
         
         // Prevent duplicate RecoveryAction if one already exists
-        if (event != null && event.getId() != null) {
-             // In a real app we'd have a finder on RecoveryActionRepository for failureClassification.
-             // But let's assume we handle it here or let the DB unique constraint throw.
+        Optional<RecoveryAction> existing = recoveryActionRepository.findByFailureClassification(classification);
+        if (existing.isPresent()) {
+            log.info("RecoveryAction already exists for classification id={}, skipping duplicate", classification.getId());
+            auditService.log(
+                    "FAILURE_CLASSIFICATION",
+                    classification.getId() != null ? classification.getId() : 0L,
+                    "DUPLICATE_RECOVERY_ACTION_SKIPPED",
+                    "SYSTEM",
+                    "RecoveryAction already exists for classification id " + classification.getId()
+            );
+            return;
         }
 
         Customer customer = extractCustomer(event);
@@ -59,7 +68,7 @@ public class RecoveryActionService {
             daysSinceFailure = (int) ChronoUnit.DAYS.between(event.getReceivedAt(), Instant.now());
         }
 
-        String draftMessage = geminiClient.generateDraft(
+        DraftResult draftResult = geminiClient.generateDraft(
                 customerName,
                 event != null ? event.getAmount() : null,
                 currency,
@@ -67,9 +76,7 @@ public class RecoveryActionService {
                 daysSinceFailure
         );
 
-        String draftSource = geminiClient.getLastDraftSource();
-
-        if (draftMessage == null) {
+        if (draftResult == null || draftResult.message() == null) {
             log.warn("Gemini API failed to generate a draft for classification id={}", classification.getId());
             auditService.log(
                     "FAILURE_CLASSIFICATION",
@@ -80,6 +87,9 @@ public class RecoveryActionService {
             );
             return;
         }
+
+        String draftMessage = draftResult.message();
+        String draftSource = draftResult.source();
 
         Optional<String> blockReason = validationService.validateDraft(draftMessage, event != null ? event.getAmount() : null);
         
@@ -158,10 +168,27 @@ public class RecoveryActionService {
      */
     @Transactional
     public RecoveryAction approveAndDispatch(Long actionId, String approvedBy) {
+        return approveAndDispatch(actionId, approvedBy, null, null);
+    }
+
+    /**
+     * Approves a recovery action with selected tone strategy, generates a Razorpay payment link,
+     * and dispatches multi-channel communications.
+     */
+    @Transactional
+    public RecoveryAction approveAndDispatch(Long actionId, String approvedBy, String tone, String customMessage) {
         approveAction(actionId, approvedBy);
 
         RecoveryAction action = recoveryActionRepository.findById(actionId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("RecoveryAction not found with id: " + actionId));
+
+        if (tone != null && !tone.isBlank()) {
+            action.setTone(tone.toLowerCase(java.util.Locale.ROOT));
+        }
+
+        if (customMessage != null && !customMessage.isBlank()) {
+            action.setAiDraftMessage(customMessage);
+        }
 
         PaymentLink paymentLink = paymentLinkService.createLinkForRecoveryAction(action);
         dispatchService.dispatchRecovery(action, paymentLink.getShortUrl());
@@ -170,12 +197,20 @@ public class RecoveryActionService {
         action.setSentAt(Instant.now());
         RecoveryAction updated = recoveryActionRepository.save(action);
 
+        sseService.broadcast("recovery.dispatched", java.util.Map.of(
+                "actionId", actionId,
+                "tone", tone != null ? tone : "balanced",
+                "paymentLinkUrl", paymentLink.getShortUrl() != null ? paymentLink.getShortUrl() : "",
+                "timestamp", Instant.now().toString()
+        ));
+
+        String toneSuffix = (tone != null && !tone.isBlank()) ? " (Tone: " + tone.toUpperCase(java.util.Locale.ROOT) + ")" : "";
         auditService.log(
                 "RECOVERY_ACTION",
                 actionId,
                 "ACTION_DISPATCHED",
                 approvedBy,
-                "Recovery action dispatched via EMAIL with payment link: " + paymentLink.getShortUrl()
+                "Recovery action dispatched via EMAIL" + toneSuffix + " with payment link: " + paymentLink.getShortUrl()
         );
 
         return updated;

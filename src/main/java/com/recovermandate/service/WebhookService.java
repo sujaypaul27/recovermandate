@@ -6,12 +6,16 @@ import com.recovermandate.audit.AuditService;
 import com.recovermandate.entity.Customer;
 import com.recovermandate.entity.Merchant;
 import com.recovermandate.entity.PaymentEvent;
+import com.recovermandate.entity.PaymentLink;
 import com.recovermandate.entity.Plan;
+import com.recovermandate.entity.RecoveryAction;
 import com.recovermandate.entity.Subscription;
 import com.recovermandate.repository.CustomerRepository;
 import com.recovermandate.repository.MerchantRepository;
 import com.recovermandate.repository.PaymentEventRepository;
+import com.recovermandate.repository.PaymentLinkRepository;
 import com.recovermandate.repository.PlanRepository;
+import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.repository.SubscriptionRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -45,6 +49,8 @@ public class WebhookService {
     private final AuditService auditService;
     private final SseService sseService;
     private final ObjectMapper objectMapper;
+    private final PaymentLinkRepository paymentLinkRepository;
+    private final RecoveryActionRepository recoveryActionRepository;
 
     /**
      * Handles a verified Razorpay webhook event.
@@ -139,6 +145,14 @@ public class WebhookService {
             );
 
             // Classify failure if event is payment.failed
+            // NOTE [ARCHITECTURAL TRADE-OFF / LATENCY]:
+            // Failure classification and Gemini AI draft generation currently execute synchronously within
+            // this transactional webhook handler to ensure immediate consistency for real-time SSE streaming
+            // and synchronous test assertions. In high-throughput production environments with strict 5-second
+            // webhook SLA cutoffs from Razorpay, webhook acknowledgement (saving PaymentEvent and returning 200)
+            // would be decoupled from classification/draft generation via an asynchronous event bus (@Async,
+            // Spring ApplicationEventPublisher, or RabbitMQ/Kafka queue worker). Circuit breakers & heuristic
+            // fallbacks in GeminiClient (500ms timeout) mitigate gateway timeout risk in the interim.
             if ("payment.failed".equals(eventType)) {
                 if (subscription != null && ("halted".equalsIgnoreCase(subscription.getStatus()) || "cancelled".equalsIgnoreCase(subscription.getStatus()))) {
                     log.info("Skipping failure classification because subscription {} is {}", subscription.getRazorpaySubscriptionId(), subscription.getStatus());
@@ -165,6 +179,10 @@ public class WebhookService {
                         }
                     }
                 }
+            } else if ("payment_link.paid".equals(eventType)) {
+                handlePaymentLinkPaid(root, savedEvent);
+            } else if ("payment_link.expired".equals(eventType)) {
+                handlePaymentLinkExpired(root, savedEvent);
             }
 
             return savedEvent;
@@ -222,16 +240,7 @@ public class WebhookService {
     }
 
     private String extractPaymentId(JsonNode root, JsonNode paymentEntity) {
-        if (!paymentEntity.isMissingNode() && paymentEntity.hasNonNull("id")) {
-            return paymentEntity.get("id").asText();
-        }
-        if (root.hasNonNull("payment_id")) {
-            return root.get("payment_id").asText();
-        }
-        if (root.hasNonNull("id") && root.get("id").asText().startsWith("pay_")) {
-            return root.get("id").asText();
-        }
-        return null;
+        return com.recovermandate.util.WebhookPayloadUtils.extractPaymentId(root, paymentEntity);
     }
 
     private Long extractAmount(JsonNode root, JsonNode paymentEntity, JsonNode subscriptionEntity) {
@@ -416,5 +425,104 @@ public class WebhookService {
             return root.get("customer_name").asText();
         }
         return "Razorpay Customer";
+    }
+
+    private void handlePaymentLinkPaid(JsonNode root, PaymentEvent savedEvent) {
+        String razorpayLinkId = extractPaymentLinkId(root);
+        if (razorpayLinkId == null || razorpayLinkId.isBlank()) {
+            log.warn("payment_link.paid webhook missing payment link ID");
+            return;
+        }
+
+        Optional<PaymentLink> linkOpt = paymentLinkRepository.findByRazorpayLinkId(razorpayLinkId);
+        if (linkOpt.isPresent()) {
+            PaymentLink link = linkOpt.get();
+            link.setStatus("PAID");
+            link.setPaidAt(Instant.now());
+            paymentLinkRepository.save(link);
+
+            RecoveryAction action = link.getRecoveryAction();
+            Long recoveredAmount = link.getAmount() != null ? link.getAmount() : (savedEvent != null && savedEvent.getAmount() != null ? savedEvent.getAmount() : 0L);
+
+            if (action != null) {
+                action.setStatus("RECOVERED");
+                recoveryActionRepository.save(action);
+
+                auditService.log(
+                        "RECOVERY_ACTION",
+                        action.getId(),
+                        "PAYMENT_RECOVERED",
+                        "SYSTEM",
+                        String.format("Payment link %s paid. Revenue recovered: %d paise", razorpayLinkId, recoveredAmount)
+                );
+
+                sseService.broadcast("recovery.completed", java.util.Map.of(
+                        "actionId", action.getId(),
+                        "amount", recoveredAmount,
+                        "paymentLinkId", razorpayLinkId,
+                        "timestamp", Instant.now().toString()
+                ));
+            } else {
+                auditService.log(
+                        "PAYMENT_LINK",
+                        link.getId(),
+                        "PAYMENT_RECOVERED",
+                        "SYSTEM",
+                        String.format("Payment link %s paid. Revenue recovered: %d paise", razorpayLinkId, recoveredAmount)
+                );
+
+                sseService.broadcast("recovery.completed", java.util.Map.of(
+                        "amount", recoveredAmount,
+                        "paymentLinkId", razorpayLinkId,
+                        "timestamp", Instant.now().toString()
+                ));
+            }
+            log.info("Closed-loop recovery completed for linkId={}, recoveredAmount={}", razorpayLinkId, recoveredAmount);
+        } else {
+            log.warn("PaymentLink not found for linkId={}", razorpayLinkId);
+        }
+    }
+
+    private void handlePaymentLinkExpired(JsonNode root, PaymentEvent savedEvent) {
+        String razorpayLinkId = extractPaymentLinkId(root);
+        if (razorpayLinkId == null || razorpayLinkId.isBlank()) {
+            log.warn("payment_link.expired webhook missing payment link ID");
+            return;
+        }
+
+        Optional<PaymentLink> linkOpt = paymentLinkRepository.findByRazorpayLinkId(razorpayLinkId);
+        if (linkOpt.isPresent()) {
+            PaymentLink link = linkOpt.get();
+            link.setStatus("EXPIRED");
+            paymentLinkRepository.save(link);
+
+            auditService.log(
+                    "PAYMENT_LINK",
+                    link.getId(),
+                    "PAYMENT_LINK_EXPIRED",
+                    "SYSTEM",
+                    "Payment link " + razorpayLinkId + " marked as EXPIRED"
+            );
+            log.info("Payment link marked as EXPIRED for linkId={}", razorpayLinkId);
+        }
+    }
+
+    private String extractPaymentLinkId(JsonNode root) {
+        JsonNode plNode = root.path("payload").path("payment_link").path("entity");
+        if (plNode.hasNonNull("id")) {
+            return plNode.get("id").asText();
+        }
+        JsonNode plDirect = root.path("payload").path("payment_link");
+        if (plDirect.hasNonNull("id")) {
+            return plDirect.get("id").asText();
+        }
+        JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
+        if (paymentEntity.hasNonNull("payment_link_id")) {
+            return paymentEntity.get("payment_link_id").asText();
+        }
+        if (root.hasNonNull("payment_link_id")) {
+            return root.get("payment_link_id").asText();
+        }
+        return null;
     }
 }

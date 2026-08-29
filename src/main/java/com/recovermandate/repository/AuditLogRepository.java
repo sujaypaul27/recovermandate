@@ -25,4 +25,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("endDate") Instant endDate,
             Pageable pageable
     );
+
+    java.util.Optional<AuditLog> findTopByOrderByIdDesc();
+
+    @Query("SELECT a FROM AuditLog a WHERE LOWER(a.action) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(a.reasoning) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(a.actor) LIKE LOWER(CONCAT('%', :query, '%'))")
+    java.util.List<AuditLog> searchAuditLogs(@Param("query") String query, Pageable pageable);
 }

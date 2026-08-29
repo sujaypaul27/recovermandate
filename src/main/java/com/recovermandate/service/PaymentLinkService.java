@@ -56,8 +56,10 @@ public class PaymentLinkService {
             }
         }
 
-        String customerEmail = customer != null ? customer.getEmail() : "customer@example.com";
-        String customerName = customer != null ? customer.getName() : "Valued Customer";
+        String customerEmail = customer != null ? customer.getEmail() : null;
+        String customerName = customer != null && customer.getName() != null && !customer.getName().isBlank()
+                ? customer.getName()
+                : "Valued Customer";
         Instant expireBy = Instant.now().plus(48, ChronoUnit.HOURS);
         String description = "Recovery payment for mandate failure (Action #" + action.getId() + ")";
 

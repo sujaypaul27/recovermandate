@@ -158,9 +158,23 @@ public class BankHealthService {
     }
 
     /**
-     * Returns all latest bank health snapshots for dashboard rendering.
+     * Returns only the single latest bank health snapshot per distinct bank code.
      */
     public List<BankHealthSnapshot> getLatestSnapshots() {
-        return bankHealthSnapshotRepository.findAllByOrderByCreatedAtDesc();
+        List<String> bankCodes = bankHealthSnapshotRepository.findDistinctBankCodes();
+        if (bankCodes == null || bankCodes.isEmpty()) {
+            bankCodes = KNOWN_BANKS;
+        } else {
+            Set<String> allBanks = new LinkedHashSet<>(bankCodes);
+            allBanks.addAll(KNOWN_BANKS);
+            bankCodes = new ArrayList<>(allBanks);
+        }
+
+        List<BankHealthSnapshot> latestSnapshots = new ArrayList<>();
+        for (String bankCode : bankCodes) {
+            bankHealthSnapshotRepository.findTopByBankCodeOrderByCreatedAtDesc(bankCode)
+                    .ifPresent(latestSnapshots::add);
+        }
+        return latestSnapshots;
     }
 }

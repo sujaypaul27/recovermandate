@@ -31,6 +31,9 @@ class AuditLogControllerTest {
     @MockBean
     private AuditQueryService auditQueryService;
 
+    @MockBean
+    private com.recovermandate.audit.AuditService auditService;
+
     @Test
     void getAuditLogs_returnsPage() throws Exception {
         AuditLogResponse log = AuditLogResponse.builder()
@@ -45,5 +48,21 @@ class AuditLogControllerTest {
         mockMvc.perform(get("/api/audit-log?page=0&size=20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].action").value("ACTION_APPROVED"));
+    }
+
+    @Test
+    void verifyChain_returnsResult() throws Exception {
+        com.recovermandate.dto.AuditChainVerificationResponse response = com.recovermandate.dto.AuditChainVerificationResponse.builder()
+                .valid(true)
+                .chainLength(15L)
+                .message("Cryptographic hash chain verified successfully")
+                .build();
+
+        when(auditService.verifyChain()).thenReturn(response);
+
+        mockMvc.perform(get("/api/audit-log/verify-chain"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.chainLength").value(15));
     }
 }

@@ -31,7 +31,6 @@ public class GeminiClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final HeuristicFallbackEngine heuristicFallbackEngine;
-    private volatile String lastDraftSource = "AI";
 
     public GeminiClient(org.springframework.boot.web.client.RestTemplateBuilder restTemplateBuilder,
                         ObjectMapper objectMapper,
@@ -39,10 +38,6 @@ public class GeminiClient {
         this.restTemplate = restTemplateBuilder.build();
         this.objectMapper = objectMapper;
         this.heuristicFallbackEngine = heuristicFallbackEngine;
-    }
-
-    public String getLastDraftSource() {
-        return lastDraftSource;
     }
 
     /**
@@ -53,13 +48,11 @@ public class GeminiClient {
      * @param currency         The currency of the failed payment
      * @param failureCategory  The category of the failure (e.g. insufficient_funds)
      * @param daysSinceFailure The number of days since the failure occurred
-     * @return The drafted message, or fallback template if the API call fails or circuit is open
+     * @return The DraftResult with message and source ("AI" or "HEURISTIC")
      */
     @CircuitBreaker(name = "geminiApi", fallbackMethod = "generateDraftFallback")
     @Retry(name = "geminiApi")
-    public String generateDraft(String customerName, Long amount, String currency, String failureCategory, int daysSinceFailure) {
-        this.lastDraftSource = "AI";
-
+    public DraftResult generateDraft(String customerName, Long amount, String currency, String failureCategory, int daysSinceFailure) {
         if (apiKey == null || apiKey.isBlank()) {
             log.warn("Gemini API key is not configured. Falling back to heuristic engine.");
             return generateDraftFallback(customerName, amount, currency, failureCategory, daysSinceFailure,
@@ -102,8 +95,8 @@ public class GeminiClient {
                 if (candidates.isArray() && !candidates.isEmpty()) {
                     JsonNode parts = candidates.get(0).path("content").path("parts");
                     if (parts.isArray() && !parts.isEmpty()) {
-                        this.lastDraftSource = "AI";
-                        return parts.get(0).path("text").asText().trim();
+                        String message = parts.get(0).path("text").asText().trim();
+                        return new DraftResult(message, "AI");
                     }
                 }
             }
@@ -115,9 +108,9 @@ public class GeminiClient {
         }
     }
 
-    public String generateDraftFallback(String customerName, Long amount, String currency, String failureCategory, int daysSinceFailure, Throwable t) {
+    public DraftResult generateDraftFallback(String customerName, Long amount, String currency, String failureCategory, int daysSinceFailure, Throwable t) {
         log.warn("Gemini API circuit breaker activated, using heuristic fallback. Cause: {}", t.getMessage());
-        this.lastDraftSource = "HEURISTIC";
-        return heuristicFallbackEngine.generateTemplate(failureCategory, amount, currency);
+        String template = heuristicFallbackEngine.generateTemplate(failureCategory, amount, currency);
+        return new DraftResult(template, "HEURISTIC");
     }
 }

@@ -1,5 +1,7 @@
 package com.recovermandate.controller;
 
+import com.recovermandate.audit.AuditService;
+import com.recovermandate.dto.AuditChainVerificationResponse;
 import com.recovermandate.dto.AuditLogResponse;
 import com.recovermandate.service.AuditQueryService;
 import jakarta.validation.constraints.Max;
@@ -23,6 +25,7 @@ import java.time.Instant;
 public class AuditLogController {
 
     private final AuditQueryService auditQueryService;
+    private final AuditService auditService;
 
     @GetMapping
     public Page<AuditLogResponse> getAuditLogs(
@@ -34,5 +37,10 @@ public class AuditLogController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         
         return auditQueryService.getAuditLogs(entityType, actor, startDate, endDate, PageRequest.of(page, size));
+    }
+
+    @GetMapping("/verify-chain")
+    public AuditChainVerificationResponse verifyChain() {
+        return auditService.verifyChain();
     }
 }

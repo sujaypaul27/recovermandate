@@ -46,6 +46,9 @@ public class RecoveryAction {
     @Column(name = "approved_by")
     private String approvedBy;
 
+    @Column(name = "tone")
+    private String tone;
+
     @Column(name = "approved_at")
     private Instant approvedAt;
 
