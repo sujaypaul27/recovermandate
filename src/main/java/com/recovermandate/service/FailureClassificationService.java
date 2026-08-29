@@ -138,7 +138,7 @@ public class FailureClassificationService {
      * This goes into the audit log so a reviewer can understand the decision
      * without reading source code.
      */
-    private String describeMatchedRule(String rawErrorCode, String category) {
+    public static String describeMatchedRule(String rawErrorCode, String category) {
         if (rawErrorCode == null || rawErrorCode.isBlank()) {
             return "null/blank error_code -> defaults to unknown";
         }

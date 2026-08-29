@@ -37,6 +37,8 @@ class RecoveryActionServiceTest {
     private PaymentLinkService paymentLinkService;
     @Mock
     private DispatchService dispatchService;
+    @Mock
+    private BankHealthService bankHealthService;
 
     @InjectMocks
     private RecoveryActionService recoveryActionService;
@@ -225,5 +227,48 @@ class RecoveryActionServiceTest {
                 eq("ADMIN_USER"),
                 contains("https://rzp.io/l/testLink")
         );
+    }
+
+    @Test
+    void testGetRecoveryActions_PopulatesExplainabilityFields() {
+        PaymentEvent pe = new PaymentEvent();
+        pe.setId(10L);
+        pe.setRazorpayPaymentId("pay_abc123");
+        pe.setFailureReasonCode("BAD_REQUEST_ERROR");
+        pe.setAmount(99900L);
+
+        FailureClassification fc = new FailureClassification();
+        fc.setId(100L);
+        fc.setCategory("insufficient_funds");
+        fc.setAutoRecoverable(false);
+        fc.setRawErrorCode("BAD_REQUEST_ERROR");
+        fc.setPaymentEvent(pe);
+
+        RecoveryAction action = new RecoveryAction();
+        action.setId(1000L);
+        action.setFailureClassification(fc);
+        action.setStatus("DRAFTED");
+        action.setDraftSource("GEMINI");
+        action.setAiDraftMessage("Test draft message");
+
+        when(bankHealthService.extractBankCode(pe)).thenReturn("HDFC");
+        when(recoveryActionRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(action)));
+
+        org.springframework.data.domain.Page<com.recovermandate.dto.RecoveryActionResponse> page =
+                recoveryActionService.getRecoveryActions(null, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertNotNull(page);
+        assertEquals(1, page.getTotalElements());
+        com.recovermandate.dto.RecoveryActionResponse resp = page.getContent().get(0);
+        assertEquals(1000L, resp.getId());
+        assertEquals("BAD_REQUEST_ERROR", resp.getRawErrorCode());
+        assertEquals("insufficient_funds", resp.getCategory());
+        assertEquals(false, resp.getAutoRecoverable());
+        assertEquals("HDFC", resp.getBank());
+        assertEquals("pay_abc123", resp.getRazorpayPaymentId());
+        assertEquals(99900L, resp.getAmount());
+        assertNotNull(resp.getMatchedRule());
+        assertTrue(resp.getMatchedRule().contains("insufficient_funds"));
     }
 }

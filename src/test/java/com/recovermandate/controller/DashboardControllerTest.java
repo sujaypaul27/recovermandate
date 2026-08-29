@@ -43,4 +43,16 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.pendingApprovalsCount").value(2))
                 .andExpect(jsonPath("$.blockedDraftsCount").value(1));
     }
+
+    @Test
+    void exportCsv_returnsCsvAttachment() throws Exception {
+        byte[] csv = "Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash\r\npay_123,sub_456,user@test.com,insufficient_funds,2026-08-29T10:00:00Z,RAZORPAY_PAYMENT_LINK,499.00,RECOVERED,abc123hash\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(dashboardService.exportRecoveryLedgerCsv()).thenReturn(csv);
+
+        mockMvc.perform(get("/api/dashboard/export-csv"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Type", "text/csv; charset=UTF-8"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", "attachment; filename=\"recovermandate-recovery-ledger.csv\""))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(csv));
+    }
 }

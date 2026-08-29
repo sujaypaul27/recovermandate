@@ -15,9 +15,11 @@ import {
   Copy,
   Calendar,
   X,
+  Download,
 } from "lucide-react";
 import {
   fetchPaymentEvents,
+  exportRecoveryLedgerCsv,
   type PageResponse,
   type PaymentEventItem,
 } from "../lib/api";
@@ -48,6 +50,18 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d">("all");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    try {
+      await exportRecoveryLedgerCsv();
+    } catch (e: any) {
+      console.error("Failed to export recovery ledger CSV:", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -116,6 +130,17 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={isExporting}
+              className="dark:border-slate-700 text-xs font-semibold gap-1.5 shadow-sm"
+              title="Download recovery ledger CSV"
+            >
+              <Download className={`w-3.5 h-3.5 text-blue-500 ${isExporting ? "animate-bounce" : ""}`} />
+              {isExporting ? "Exporting..." : "Export Ledger (.CSV)"}
+            </Button>
             <Button variant="outline" size="sm" onClick={load} className="dark:border-slate-700 text-xs">
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
             </Button>

@@ -32,6 +32,12 @@ class DashboardServiceTest {
     @Mock
     private FailureClassificationRepository failureClassificationRepository;
 
+    @Mock
+    private com.recovermandate.repository.AuditLogRepository auditLogRepository;
+
+    @Mock
+    private com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
+
     @InjectMocks
     private DashboardService dashboardService;
 
@@ -85,5 +91,48 @@ class DashboardServiceTest {
         assertTrue(summary.getAvgResolutionTimeMinutes() > 0.0);
         assertEquals(12L, summary.getFailuresByCategory().get("insufficient_funds"));
         assertEquals(8L, summary.getFailuresByCategory().get("technical_decline"));
+    }
+
+    @Test
+    @DisplayName("Should generate valid CSV with all required headers and rows")
+    void exportRecoveryLedgerCsv_generatesValidCsv() {
+        PaymentEvent event = new PaymentEvent();
+        event.setId(1L);
+        event.setRazorpayPaymentId("pay_123");
+        event.setAmount(49900L);
+        event.setEventType("payment.failed");
+        event.setReceivedAt(Instant.now());
+
+        FailureClassification fc = new FailureClassification();
+        fc.setId(10L);
+        fc.setCategory("insufficient_funds");
+        fc.setPaymentEvent(event);
+
+        RecoveryAction ra = new RecoveryAction();
+        ra.setId(100L);
+        ra.setStatus("RECOVERED");
+        ra.setPaymentLinkUrl("https://rzp.io/l/test");
+        ra.setFailureClassification(fc);
+
+        when(paymentEventRepository.findAll()).thenReturn(List.of(event));
+        when(failureClassificationRepository.findByPaymentEvent(event)).thenReturn(java.util.Optional.of(fc));
+        when(recoveryActionRepository.findByFailureClassification(fc)).thenReturn(java.util.Optional.of(ra));
+
+        com.recovermandate.entity.AuditLog audit = new com.recovermandate.entity.AuditLog();
+        audit.setChecksum("checksum12345");
+        when(auditLogRepository.findTopByEntityTypeAndEntityIdOrderByIdDesc("RECOVERY_ACTION", 100L))
+                .thenReturn(java.util.Optional.of(audit));
+
+        byte[] csv = dashboardService.exportRecoveryLedgerCsv();
+        assertNotNull(csv);
+        String csvString = new String(csv, java.nio.charset.StandardCharsets.UTF_8);
+
+        assertTrue(csvString.contains("Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash"));
+        assertTrue(csvString.contains("pay_123"));
+        assertTrue(csvString.contains("insufficient_funds"));
+        assertTrue(csvString.contains("RAZORPAY_PAYMENT_LINK"));
+        assertTrue(csvString.contains("499.00"));
+        assertTrue(csvString.contains("RECOVERED"));
+        assertTrue(csvString.contains("checksum12345"));
     }
 }

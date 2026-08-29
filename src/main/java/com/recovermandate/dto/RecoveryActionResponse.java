@@ -23,4 +23,12 @@ public class RecoveryActionResponse {
     private Instant sentAt;
     private Instant createdAt;
     private String actor;
+    private String rawErrorCode;
+    private String bank;
+    private String category;
+    private Boolean autoRecoverable;
+    private String matchedRule;
+    private String razorpayPaymentId;
+    private Long amount;
+    private String customerEmail;
 }

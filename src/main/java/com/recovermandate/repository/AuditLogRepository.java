@@ -28,6 +28,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     java.util.Optional<AuditLog> findTopByOrderByIdDesc();
 
+    java.util.Optional<AuditLog> findTopByEntityTypeAndEntityIdOrderByIdDesc(String entityType, Long entityId);
+
     @Query("SELECT a FROM AuditLog a WHERE LOWER(a.action) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(a.reasoning) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(a.actor) LIKE LOWER(CONCAT('%', :query, '%'))")
     java.util.List<AuditLog> searchAuditLogs(@Param("query") String query, Pageable pageable);
 }

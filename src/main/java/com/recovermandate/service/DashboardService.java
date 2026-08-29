@@ -27,6 +27,8 @@ public class DashboardService {
     private final PaymentEventRepository paymentEventRepository;
     private final RecoveryActionRepository recoveryActionRepository;
     private final FailureClassificationRepository failureClassificationRepository;
+    private final com.recovermandate.repository.AuditLogRepository auditLogRepository;
+    private final com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
 
     @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
@@ -111,5 +113,82 @@ public class DashboardService {
         }
 
         return (double) totalSeconds / (count * 60.0);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportRecoveryLedgerCsv() {
+        List<PaymentEvent> events = paymentEventRepository.findAll();
+        StringBuilder sb = new StringBuilder();
+        sb.append("Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash\r\n");
+
+        for (PaymentEvent event : events) {
+            String paymentId = event.getRazorpayPaymentId() != null ? event.getRazorpayPaymentId() : "pay_" + event.getId();
+            String subscriptionId = (event.getSubscription() != null && event.getSubscription().getRazorpaySubscriptionId() != null)
+                    ? event.getSubscription().getRazorpaySubscriptionId()
+                    : "N/A";
+            String customerEmail = (event.getSubscription() != null && event.getSubscription().getCustomer() != null && event.getSubscription().getCustomer().getEmail() != null)
+                    ? event.getSubscription().getCustomer().getEmail()
+                    : "customer@example.com";
+
+            var fcOpt = failureClassificationRepository.findByPaymentEvent(event);
+            String failureCategory = fcOpt.map(com.recovermandate.entity.FailureClassification::getCategory)
+                    .orElseGet(() -> "subscription.charged".equals(event.getEventType()) ? "SUCCESS" : "UNCLASSIFIED");
+
+            String failureTime = event.getReceivedAt() != null ? event.getReceivedAt().toString() : "";
+
+            var raOpt = fcOpt.flatMap(recoveryActionRepository::findByFailureClassification);
+            String status;
+            String channel;
+            String auditHash = "N/A";
+
+            if (raOpt.isPresent()) {
+                RecoveryAction ra = raOpt.get();
+                status = ra.getStatus();
+                channel = (ra.getPaymentLinkUrl() != null && !ra.getPaymentLinkUrl().isBlank())
+                        ? "RAZORPAY_PAYMENT_LINK"
+                        : "EMAIL_DISPATCH";
+
+                var auditOpt = auditLogRepository.findTopByEntityTypeAndEntityIdOrderByIdDesc("RECOVERY_ACTION", ra.getId());
+                if (auditOpt.isPresent() && auditOpt.get().getChecksum() != null) {
+                    auditHash = auditOpt.get().getChecksum();
+                }
+            } else if ("subscription.charged".equals(event.getEventType())) {
+                status = "RECOVERED";
+                channel = "DIRECT_MANDATE_CHARGE";
+            } else {
+                status = "FAILED";
+                channel = "WEBHOOK_INTERCEPT";
+            }
+
+            if ("N/A".equals(auditHash) && event.getId() != null) {
+                var eventAuditOpt = auditLogRepository.findTopByEntityTypeAndEntityIdOrderByIdDesc("PAYMENT_EVENT", event.getId());
+                if (eventAuditOpt.isPresent() && eventAuditOpt.get().getChecksum() != null) {
+                    auditHash = eventAuditOpt.get().getChecksum();
+                }
+            }
+
+            double amountInRupees = (event.getAmount() != null ? event.getAmount() : 0L) / 100.0;
+            String settledAmount = String.format(java.util.Locale.US, "%.2f", amountInRupees);
+
+            sb.append(escapeCsv(paymentId)).append(",")
+              .append(escapeCsv(subscriptionId)).append(",")
+              .append(escapeCsv(customerEmail)).append(",")
+              .append(escapeCsv(failureCategory)).append(",")
+              .append(escapeCsv(failureTime)).append(",")
+              .append(escapeCsv(channel)).append(",")
+              .append(escapeCsv(settledAmount)).append(",")
+              .append(escapeCsv(status)).append(",")
+              .append(escapeCsv(auditHash)).append("\r\n");
+        }
+
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) return "";
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }

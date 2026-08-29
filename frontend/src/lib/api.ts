@@ -59,6 +59,10 @@ export interface RecoveryActionItem {
   paymentEventId?: number;
   razorpayPaymentId?: string;
   category?: string;
+  rawErrorCode?: string;
+  bank?: string;
+  autoRecoverable?: boolean;
+  matchedRule?: string;
   amount?: number;
   customerEmail?: string;
   aiDraftMessage?: string;
@@ -264,6 +268,22 @@ export async function simulateFullFlow(params?: { category?: string; amount?: nu
   });
   if (!res.ok) throw new Error("Failed to simulate end-to-end recovery flow");
   return res.json();
+}
+
+export async function exportRecoveryLedgerCsv(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/dashboard/export-csv`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to export recovery ledger CSV");
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "recovermandate-recovery-ledger.csv";
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 

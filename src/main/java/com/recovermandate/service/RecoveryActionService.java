@@ -31,6 +31,7 @@ public class RecoveryActionService {
     private final SseService sseService;
     private final PaymentLinkService paymentLinkService;
     private final DispatchService dispatchService;
+    private final BankHealthService bankHealthService;
 
     @Transactional
     public void processFailure(FailureClassification classification) {
@@ -244,9 +245,28 @@ public class RecoveryActionService {
         } else {
             actions = recoveryActionRepository.findAll(pageable);
         }
-        return actions.map(action -> com.recovermandate.dto.RecoveryActionResponse.builder()
+        return actions.map(this::toResponse);
+    }
+
+    private com.recovermandate.dto.RecoveryActionResponse toResponse(RecoveryAction action) {
+        FailureClassification fc = action.getFailureClassification();
+        PaymentEvent pe = fc != null ? fc.getPaymentEvent() : null;
+
+        String rawErrorCode = fc != null ? fc.getRawErrorCode() : (pe != null ? pe.getFailureReasonCode() : null);
+        String category = fc != null ? fc.getCategory() : null;
+        Boolean autoRecoverable = fc != null ? fc.isAutoRecoverable() : null;
+        String bank = (pe != null && bankHealthService != null) ? bankHealthService.extractBankCode(pe) : null;
+        String paymentId = pe != null ? pe.getRazorpayPaymentId() : null;
+        Long amount = pe != null ? pe.getAmount() : null;
+        String customerEmail = (pe != null && pe.getSubscription() != null && pe.getSubscription().getCustomer() != null)
+                ? pe.getSubscription().getCustomer().getEmail()
+                : null;
+
+        String matchedRule = FailureClassificationService.describeMatchedRule(rawErrorCode, category != null ? category : "unknown");
+
+        return com.recovermandate.dto.RecoveryActionResponse.builder()
                 .id(action.getId())
-                .failureClassificationId(action.getFailureClassification() != null ? action.getFailureClassification().getId() : null)
+                .failureClassificationId(fc != null ? fc.getId() : null)
                 .aiDraftMessage(action.getAiDraftMessage())
                 .draftSource(action.getDraftSource())
                 .paymentLinkUrl(action.getPaymentLinkUrl())
@@ -256,6 +276,14 @@ public class RecoveryActionService {
                 .sentAt(action.getSentAt())
                 .createdAt(action.getCreatedAt())
                 .actor(action.getActor())
-                .build());
+                .rawErrorCode(rawErrorCode)
+                .bank(bank)
+                .category(category)
+                .autoRecoverable(autoRecoverable)
+                .matchedRule(matchedRule)
+                .razorpayPaymentId(paymentId)
+                .amount(amount)
+                .customerEmail(customerEmail)
+                .build();
     }
 }

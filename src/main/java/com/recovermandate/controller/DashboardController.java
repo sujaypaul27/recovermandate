@@ -18,4 +18,13 @@ public class DashboardController {
     public DashboardSummaryResponse getSummary() {
         return dashboardService.getSummary();
     }
+
+    @GetMapping(value = "/export-csv", produces = "text/csv; charset=UTF-8")
+    public org.springframework.http.ResponseEntity<byte[]> exportCsv() {
+        byte[] csvData = dashboardService.exportRecoveryLedgerCsv();
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"recovermandate-recovery-ledger.csv\"")
+                .body(csvData);
+    }
 }

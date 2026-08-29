@@ -17,12 +17,14 @@ import {
   PieChart,
   Sparkles,
   Play,
+  Download,
 } from "lucide-react";
 import {
   fetchDashboardSummary,
   simulateFailure,
   simulatePaymentPaid,
   simulateFullFlow,
+  exportRecoveryLedgerCsv,
   type DashboardSummary,
 } from "../lib/api";
 import { RazorpayMark } from "../components/RazorpayLogo";
@@ -550,6 +552,18 @@ function RecoveryFunnel({
   ];
 
   const maxVal = Math.max(...steps.map((s) => s.count), 1);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    try {
+      await exportRecoveryLedgerCsv();
+    } catch (e: any) {
+      console.error("Failed to export recovery ledger CSV:", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="glass-card rounded-2xl p-6 border-slate-200 dark:border-slate-700/60 shadow-lg relative overflow-hidden">
@@ -563,8 +577,17 @@ function RecoveryFunnel({
             Real-time pipeline progression from failure detection to revenue recovery
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={handleExportCsv}
+            disabled={isExporting}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+            title="Download full recovery ledger for accounting reconciliation (CSV)"
+          >
+            <Download className={`w-3.5 h-3.5 text-blue-500 ${isExporting ? "animate-bounce" : ""}`} />
+            <span>{isExporting ? "Exporting..." : "Export Recovery Ledger (.CSV)"}</span>
+          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20 shadow-sm">
             <Activity className="w-3.5 h-3.5" /> {summary.recoveryRate}% Recovery Rate
           </div>
         </div>
