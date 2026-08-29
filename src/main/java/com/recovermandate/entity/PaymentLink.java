@@ -19,7 +19,12 @@ import lombok.NoArgsConstructor;
  * Entity representing a Razorpay Payment Link generated for recovering a failed mandate.
  */
 @Entity
-@Table(name = "payment_links")
+@Table(
+    name = "payment_links",
+    indexes = {
+        @jakarta.persistence.Index(name = "idx_payment_links_rzp_id", columnList = "razorpay_link_id", unique = true)
+    }
+)
 @Data
 @Builder
 @NoArgsConstructor
@@ -34,7 +39,7 @@ public class PaymentLink {
     @JoinColumn(name = "recovery_action_id", nullable = false)
     private RecoveryAction recoveryAction;
 
-    @Column(name = "razorpay_link_id", nullable = false)
+    @Column(name = "razorpay_link_id", nullable = false, unique = true)
     private String razorpayLinkId;
 
     @Column(name = "short_url", nullable = false)

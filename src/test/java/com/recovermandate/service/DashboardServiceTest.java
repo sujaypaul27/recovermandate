@@ -71,7 +71,8 @@ class DashboardServiceTest {
         action.setFailureClassification(fc);
         action.setApprovedAt(Instant.now());
 
-        when(recoveryActionRepository.findByApprovedAtIsNotNull()).thenReturn(List.of(action));
+        when(recoveryActionRepository.findByApprovedAtIsNotNull(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(action)));
 
         DashboardSummaryResponse summary = dashboardService.getSummary();
 
@@ -114,7 +115,8 @@ class DashboardServiceTest {
         ra.setPaymentLinkUrl("https://rzp.io/l/test");
         ra.setFailureClassification(fc);
 
-        when(paymentEventRepository.findAll()).thenReturn(List.of(event));
+        when(paymentEventRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(event)));
         when(failureClassificationRepository.findByPaymentEvent(event)).thenReturn(java.util.Optional.of(fc));
         when(recoveryActionRepository.findByFailureClassification(fc)).thenReturn(java.util.Optional.of(ra));
 

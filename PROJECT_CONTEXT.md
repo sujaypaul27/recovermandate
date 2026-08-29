@@ -165,6 +165,21 @@ RecoverMandate is an enterprise-grade payment failure observability, AI-driven d
 | 6 | Payment Link Generation & Dispatch Pipeline | ✅ Completed | Razorpay Payment Links API, dispatch service |
 | 7 | Smart Retry Engine & Bank Health Tracker | ✅ Completed | Category-based backoff, issuer failure rate monitoring |
 | 8 | Enhanced Dashboard & ROI Metrics | ✅ Completed | Recovery funnel, MTTR, success rate, category breakdown |
+| 9 | Closed-Loop Double-Charge Guard & Webhook Lifecycle | ✅ Completed | Pre-retry checks, active link superseding, subscription lifecycle |
+| 10 | Performance Hardening, DB Integrity & Webhook DLQ | ✅ Completed | REQUIRES_NEW decoupling, bounded pagination, DLQ replay engine |
+
+---
+
+## 5.1 Architecture Decision: Single-Tenant Demo vs Multi-Tenant OAuth Roadmap
+
+### Single-Tenant Demo Mode (Current)
+* `MerchantSettings` is initialized as a singleton row (`id = 1L`) configuring autonomous Auto-Pilot rules and tone preferences.
+* High-throughput local demo execution with zero authentication friction for hackathon evaluators.
+
+### Multi-Tenant Production Roadmap
+* **Per-Merchant Isolation**: `merchant_id` foreign key mapped across `PaymentEvent`, `RecoveryAction`, `PaymentLink`, and `AuditLog`.
+* **Razorpay OAuth & Partner Auth**: Merchants authorize RecoverMandate via Razorpay OAuth 2.0; API calls use merchant-specific sub-account tokens.
+* **Tenant Scoping Filter**: Spring Security extracts `X-Merchant-ID` or JWT claims, applying automatic Hibernate `@TenantId` multi-tenancy filter.
 
 ---
 

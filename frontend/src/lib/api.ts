@@ -336,4 +336,35 @@ export async function batchApproveRecoveryActions(params: {
   return res.json();
 }
 
+export interface WebhookDlqItem {
+  id: number;
+  payload: string;
+  headers?: string;
+  errorMessage?: string;
+  status: "REJECTED" | "REPLAYED";
+  createdAt: string;
+  replayedAt?: string;
+}
+
+export async function fetchWebhookDlq(): Promise<WebhookDlqItem[]> {
+  const res = await fetch(`${API_BASE_URL}/webhooks/dlq`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch webhook DLQ items");
+  return res.json();
+}
+
+export async function replayWebhookDlq(id: number): Promise<{ message: string; eventId?: number; status: string; dlqId: number }> {
+  const res = await fetch(`${API_BASE_URL}/webhooks/dlq/${id}/replay`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Replay failed" }));
+    throw new Error(err.error || "Failed to replay webhook");
+  }
+  return res.json();
+}
+
+
 

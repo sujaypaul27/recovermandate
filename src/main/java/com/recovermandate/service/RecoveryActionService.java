@@ -36,6 +36,9 @@ public class RecoveryActionService {
     private final BankHealthService bankHealthService;
     private final MerchantSettingsService merchantSettingsService;
 
+    /**
+     * Processes unrecovered payment failures by generating and validating AI recovery drafts.
+     */
     @Transactional
     public void processFailure(FailureClassification classification) {
         if (classification.isAutoRecoverable()) {

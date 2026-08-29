@@ -11,6 +11,15 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
+/**
+ * Entity storing merchant-level autonomous recovery (Auto-Pilot) and tone preferences.
+ *
+ * NOTE [SINGLE-TENANT DEMO DESIGN CHOICE]:
+ * For the Buildathon demo and single-store deployment mode, this entity utilizes a fixed
+ * singleton record (id = 1L) initialized on startup. In multi-tenant production architectures,
+ * this entity is scoped per merchant via `merchant_id` foreign key referencing {@link Merchant},
+ * authenticated via Razorpay OAuth / Partner Sub-Merchant API tokens with per-tenant isolation.
+ */
 @Entity
 @Table(name = "merchant_settings")
 @Data

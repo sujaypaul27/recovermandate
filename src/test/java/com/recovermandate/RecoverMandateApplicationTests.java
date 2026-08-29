@@ -58,6 +58,9 @@ class RecoverMandateApplicationTests {
     @MockBean
     private com.recovermandate.repository.MerchantSettingsRepository merchantSettingsRepository;
 
+    @MockBean
+    private com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
+
     @Test
     void contextLoads() {
     }

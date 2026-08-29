@@ -89,7 +89,9 @@ public class DashboardService {
     }
 
     private double computeAvgResolutionMinutes() {
-        List<RecoveryAction> resolvedActions = recoveryActionRepository.findByApprovedAtIsNotNull();
+        List<RecoveryAction> resolvedActions = recoveryActionRepository
+                .findByApprovedAtIsNotNull(org.springframework.data.domain.PageRequest.of(0, 100))
+                .getContent();
         if (resolvedActions == null || resolvedActions.isEmpty()) {
             return 4.2; // Default baseline benchmark MTTR
         }
@@ -117,7 +119,7 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public byte[] exportRecoveryLedgerCsv() {
-        List<PaymentEvent> events = paymentEventRepository.findAll();
+        List<PaymentEvent> events = paymentEventRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 5000)).getContent();
         StringBuilder sb = new StringBuilder();
         sb.append("Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash\r\n");
 
