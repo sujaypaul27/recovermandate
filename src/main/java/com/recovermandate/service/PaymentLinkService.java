@@ -62,6 +62,9 @@ public class PaymentLinkService {
                 : "Valued Customer";
         Instant expireBy = Instant.now().plus(48, ChronoUnit.HOURS);
         String description = "Recovery payment for mandate failure (Action #" + action.getId() + ")";
+        String referenceId = (event != null && event.getRazorpayPaymentId() != null)
+                ? "rec_link_" + event.getRazorpayPaymentId()
+                : "rec_link_act_" + action.getId();
 
         Map<String, String> linkData = razorpayApiClient.createPaymentLink(
                 amount,
@@ -69,7 +72,8 @@ public class PaymentLinkService {
                 customerEmail,
                 customerName,
                 description,
-                expireBy
+                expireBy,
+                referenceId
         );
 
         PaymentLink paymentLink = PaymentLink.builder()

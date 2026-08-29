@@ -63,4 +63,20 @@ class GeminiClientTest {
         assertEquals("HEURISTIC", draft.source());
         assertEquals("Dear Customer,\n\nTechnical fallback", draft.message());
     }
+
+    @Test
+    @DisplayName("Should sanitize LLM responses by stripping markdown fences, conversational intro, and quotes")
+    void sanitizeDraftText_cleansOutput() {
+        String rawWithIntro = "Here is a draft recovery email:\n\nDear Customer,\nYour payment failed.";
+        assertEquals("Dear Customer,\nYour payment failed.", GeminiClient.sanitizeDraftText(rawWithIntro));
+
+        String rawWithMarkdown = "```markdown\nDear Customer,\nYour subscription payment of Rs 499 failed.\n```";
+        assertEquals("Dear Customer,\nYour subscription payment of Rs 499 failed.", GeminiClient.sanitizeDraftText(rawWithMarkdown));
+
+        String rawWithSubject = "Subject: Action Required: Payment Failed\n\nDear Customer,\nPlease update your card.";
+        assertEquals("Dear Customer,\nPlease update your card.", GeminiClient.sanitizeDraftText(rawWithSubject));
+
+        String rawWithQuotes = "\"Dear Customer,\nPlease retry payment.\"";
+        assertEquals("Dear Customer,\nPlease retry payment.", GeminiClient.sanitizeDraftText(rawWithQuotes));
+    }
 }

@@ -15,5 +15,9 @@ public interface RetryScheduleRepository extends JpaRepository<RetrySchedule, Lo
 
     List<RetrySchedule> findByPaymentEventId(Long paymentEventId);
 
+    List<RetrySchedule> findByPaymentEventIdAndResult(Long paymentEventId, String result);
+
+    List<RetrySchedule> findByPaymentEventSubscriptionIdAndResult(Long subscriptionId, String result);
+
     long countByResult(String result);
 }

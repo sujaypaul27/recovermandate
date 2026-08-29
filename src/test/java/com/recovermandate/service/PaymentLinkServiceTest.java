@@ -61,7 +61,7 @@ class PaymentLinkServiceTest {
         action.setId(42L);
         action.setFailureClassification(classification);
 
-        when(razorpayApiClient.createPaymentLink(eq(10000L), eq("INR"), eq("customer@test.com"), eq("John Doe"), anyString(), any()))
+        when(razorpayApiClient.createPaymentLink(eq(10000L), eq("INR"), eq("customer@test.com"), eq("John Doe"), anyString(), any(), eq("rec_link_act_42")))
                 .thenReturn(Map.of("id", "plink_test_123", "short_url", "https://rzp.io/l/test1234"));
 
         when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(i -> i.getArgument(0));

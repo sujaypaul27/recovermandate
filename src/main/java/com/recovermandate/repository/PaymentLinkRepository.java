@@ -11,5 +11,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     Optional<PaymentLink> findByRecoveryActionId(Long recoveryActionId);
 
+    Optional<PaymentLink> findByRecoveryAction(com.recovermandate.entity.RecoveryAction recoveryAction);
+
     Optional<PaymentLink> findByRazorpayLinkId(String razorpayLinkId);
 }

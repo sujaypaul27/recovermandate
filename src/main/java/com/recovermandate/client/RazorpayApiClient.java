@@ -82,8 +82,7 @@ public class RazorpayApiClient {
     }
 
     /**
-     * Generates a Razorpay Payment Link for manual invoice or mandate recovery.
-     * If credentials are not configured, returns a simulated link for demo/testing environments.
+     * Generates a Razorpay Payment Link with deterministic idempotency reference for mandate recovery.
      */
     public java.util.Map<String, String> createPaymentLink(
             Long amountInPaise,
@@ -92,6 +91,17 @@ public class RazorpayApiClient {
             String customerName,
             String description,
             Instant expireBy) {
+        return createPaymentLink(amountInPaise, currency, customerEmail, customerName, description, expireBy, null);
+    }
+
+    public java.util.Map<String, String> createPaymentLink(
+            Long amountInPaise,
+            String currency,
+            String customerEmail,
+            String customerName,
+            String description,
+            Instant expireBy,
+            String referenceId) {
 
         if (keyId == null || keyId.isBlank() || keySecret == null || keySecret.isBlank()) {
             log.warn("Razorpay API credentials not configured. Generating simulated payment link.");
@@ -105,11 +115,18 @@ public class RazorpayApiClient {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBasicAuth(keyId, keySecret);
+            if (referenceId != null && !referenceId.isBlank()) {
+                headers.set("Idempotency-Key", referenceId);
+            }
 
             java.util.Map<String, Object> body = new java.util.HashMap<>();
             body.put("amount", amountInPaise != null ? amountInPaise : 0L);
             body.put("currency", currency != null ? currency : "INR");
             body.put("description", description != null ? description : "RecoverMandate Payment");
+
+            if (referenceId != null && !referenceId.isBlank()) {
+                body.put("reference_id", referenceId);
+            }
 
             java.util.Map<String, String> customer = new java.util.HashMap<>();
             if (customerName != null) customer.put("name", customerName);
@@ -135,6 +152,30 @@ public class RazorpayApiClient {
         } catch (Exception e) {
             log.error("Failed to create Razorpay Payment Link: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to create Razorpay Payment Link: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Cancels an active Razorpay Payment Link when automated retry succeeds.
+     */
+    public boolean cancelPaymentLink(String razorpayLinkId) {
+        if (razorpayLinkId == null || razorpayLinkId.isBlank()) return false;
+
+        if (keyId == null || keyId.isBlank() || keySecret == null || keySecret.isBlank()) {
+            log.info("Simulated cancellation for payment link {}", razorpayLinkId);
+            return true;
+        }
+
+        try {
+            String url = baseUrl + "/payment_links/" + razorpayLinkId + "/cancel";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBasicAuth(keyId, keySecret);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.warn("Failed to cancel Razorpay Payment Link {}: {}", razorpayLinkId, e.getMessage());
+            return false;
         }
     }
 }

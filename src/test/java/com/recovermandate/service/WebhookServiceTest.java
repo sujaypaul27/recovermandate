@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +25,7 @@ import com.recovermandate.repository.PaymentEventRepository;
 import com.recovermandate.repository.PlanRepository;
 import com.recovermandate.repository.SubscriptionRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +73,9 @@ class WebhookServiceTest {
     @Mock
     private com.recovermandate.repository.RecoveryActionRepository recoveryActionRepository;
 
+    @Mock
+    private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
 
@@ -89,7 +95,8 @@ class WebhookServiceTest {
                 sseService,
                 objectMapper,
                 paymentLinkRepository,
-                recoveryActionRepository
+                recoveryActionRepository,
+                retryScheduleRepository
         );
     }
 
@@ -511,8 +518,8 @@ class WebhookServiceTest {
     }
 
     @Test
-    @DisplayName("Should handle payment_link.paid event and mark RecoveryAction as RECOVERED")
-    void handleVerifiedEvent_paymentLinkPaid_marksRecovered() {
+    @DisplayName("Should handle payment_link.paid event, mark RecoveryAction as RECOVERED, and cancel pending retries")
+    void handleVerifiedEvent_paymentLinkPaid_marksRecoveredAndCancelsRetries() {
         String payload = """
                 {
                   "entity": "event",
@@ -529,9 +536,16 @@ class WebhookServiceTest {
                 }
                 """;
 
+        PaymentEvent event = PaymentEvent.builder().id(777L).build();
+        com.recovermandate.entity.FailureClassification classification = com.recovermandate.entity.FailureClassification.builder()
+                .id(888L)
+                .paymentEvent(event)
+                .build();
+
         com.recovermandate.entity.RecoveryAction action = com.recovermandate.entity.RecoveryAction.builder()
                 .id(42L)
                 .status("DISPATCHED")
+                .failureClassification(classification)
                 .build();
 
         com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
@@ -542,7 +556,15 @@ class WebhookServiceTest {
                 .recoveryAction(action)
                 .build();
 
+        com.recovermandate.entity.RetrySchedule pendingRetry = com.recovermandate.entity.RetrySchedule.builder()
+                .id(101L)
+                .paymentEvent(event)
+                .attemptNumber(1)
+                .result("PENDING")
+                .build();
+
         when(paymentLinkRepository.findByRazorpayLinkId("plink_test_123")).thenReturn(Optional.of(link));
+        when(retryScheduleRepository.findByPaymentEventIdAndResult(777L, "PENDING")).thenReturn(java.util.List.of(pendingRetry));
         when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
             PaymentEvent pe = i.getArgument(0);
             pe.setId(555L);
@@ -555,17 +577,21 @@ class WebhookServiceTest {
         assertEquals("PAID", link.getStatus());
         assertNotNull(link.getPaidAt());
         assertEquals("RECOVERED", action.getStatus());
+        assertEquals("SKIPPED", pendingRetry.getResult());
+        assertEquals("SUPERSEDED_BY_LINK_PAYMENT", pendingRetry.getScheduleReason());
 
         verify(paymentLinkRepository).save(link);
         verify(recoveryActionRepository).save(action);
+        verify(retryScheduleRepository).save(pendingRetry);
         verify(auditService).log(eq("RECOVERY_ACTION"), eq(42L), eq("PAYMENT_RECOVERED"), eq("SYSTEM"), anyString());
+        verify(auditService).log(eq("RETRY_SCHEDULE"), eq(101L), eq("RETRY_CANCELLED_ALREADY_PAID"), eq("SYSTEM"), contains("plink_test_123"));
         verify(sseService).broadcast(eq("recovery.completed"), argThat((java.util.Map<String, Object> map) ->
                 map.containsKey("actionId") && Long.valueOf(75000L).equals(map.get("amount"))
         ));
     }
 
     @Test
-    @DisplayName("Should handle payment_link.expired event and mark PaymentLink as EXPIRED")
+    @DisplayName("Should handle payment_link.expired event and mark PaymentLink and RecoveryAction as EXPIRED")
     void handleVerifiedEvent_paymentLinkExpired_marksExpired() {
         String payload = """
                 {
@@ -582,11 +608,17 @@ class WebhookServiceTest {
                 }
                 """;
 
+        com.recovermandate.entity.RecoveryAction action = com.recovermandate.entity.RecoveryAction.builder()
+                .id(43L)
+                .status("DISPATCHED")
+                .build();
+
         com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
                 .id(20L)
                 .razorpayLinkId("plink_expired_999")
                 .amount(50000L)
                 .status("CREATED")
+                .recoveryAction(action)
                 .build();
 
         when(paymentLinkRepository.findByRazorpayLinkId("plink_expired_999")).thenReturn(Optional.of(link));
@@ -600,7 +632,61 @@ class WebhookServiceTest {
 
         assertNotNull(result);
         assertEquals("EXPIRED", link.getStatus());
+        assertEquals("LINK_EXPIRED", action.getStatus());
         verify(paymentLinkRepository).save(link);
+        verify(recoveryActionRepository).save(action);
         verify(auditService).log(eq("PAYMENT_LINK"), eq(20L), eq("PAYMENT_LINK_EXPIRED"), eq("SYSTEM"), anyString());
+        verify(auditService).log(eq("RECOVERY_ACTION"), eq(43L), eq("PAYMENT_LINK_EXPIRED_UNRECOVERED"), eq("SYSTEM"), anyString());
+    }
+
+    @Test
+    @DisplayName("Should handle subscription.cancelled event and cancel pending retries")
+    void handleVerifiedEvent_subscriptionCancelled_cancelsPendingRetries() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "subscription.cancelled",
+                  "payload": {
+                    "subscription": {
+                      "entity": {
+                        "id": "sub_cancel_123",
+                        "status": "cancelled"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        Subscription sub = Subscription.builder()
+                .id(999L)
+                .razorpaySubscriptionId("sub_cancel_123")
+                .status("active")
+                .build();
+
+        com.recovermandate.entity.RetrySchedule pendingRetry = com.recovermandate.entity.RetrySchedule.builder()
+                .id(202L)
+                .attemptNumber(1)
+                .result("PENDING")
+                .build();
+
+        when(subscriptionRepository.findByRazorpaySubscriptionId("sub_cancel_123")).thenReturn(Optional.of(sub));
+        when(retryScheduleRepository.findByPaymentEventSubscriptionIdAndResult(999L, "PENDING"))
+                .thenReturn(java.util.List.of(pendingRetry));
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(888L);
+            return pe;
+        });
+
+        PaymentEvent result = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(result);
+        assertEquals("cancelled", sub.getStatus());
+        assertEquals("SKIPPED", pendingRetry.getResult());
+        assertEquals("SUBSCRIPTION_CANCELLED", pendingRetry.getScheduleReason());
+        verify(subscriptionRepository, atLeastOnce()).save(sub);
+        verify(retryScheduleRepository).save(pendingRetry);
+        verify(auditService).log(eq("RETRY_SCHEDULE"), eq(202L), eq("RETRY_SKIPPED_SUBSCRIPTION_INACTIVE"), eq("SYSTEM"), contains("cancelled"));
+        verify(auditService).log(eq("SUBSCRIPTION"), eq(999L), eq("SUBSCRIPTION_STATUS_UPDATED"), eq("SYSTEM"), contains("cancelled"));
     }
 }

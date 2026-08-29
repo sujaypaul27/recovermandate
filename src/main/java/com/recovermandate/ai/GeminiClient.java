@@ -95,8 +95,9 @@ public class GeminiClient {
                 if (candidates.isArray() && !candidates.isEmpty()) {
                     JsonNode parts = candidates.get(0).path("content").path("parts");
                     if (parts.isArray() && !parts.isEmpty()) {
-                        String message = parts.get(0).path("text").asText().trim();
-                        return new DraftResult(message, "AI");
+                        String rawMessage = parts.get(0).path("text").asText().trim();
+                        String sanitized = sanitizeDraftText(rawMessage);
+                        return new DraftResult(sanitized, "AI");
                     }
                 }
             }
@@ -106,6 +107,35 @@ public class GeminiClient {
             log.error("Failed to generate draft using Gemini API: {}", e.getMessage());
             throw new RuntimeException("Failed to generate draft via Gemini API", e);
         }
+    }
+
+    /**
+     * Sanitizes raw LLM output by stripping conversational prefixes, markdown code blocks,
+     * standalone subject lines, and outer wrapping quotes.
+     */
+    public static String sanitizeDraftText(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String text = raw.trim();
+
+        // Strip markdown code fences if wrapped (e.g. ```markdown ... ``` or ``` ... ```)
+        if (text.startsWith("```")) {
+            text = text.replaceAll("^```[a-zA-Z]*\\r?\\n", "");
+            text = text.replaceAll("\\r?\\n```$", "");
+            text = text.trim();
+        }
+
+        // Strip conversational AI preambles (e.g. "Here is a draft recovery email:", "Sure, here is your message:")
+        text = text.replaceAll("(?i)^((here (is|are)|here's|sure,?\\s*(here (is|are)|here's)?)[^\r\n]*:?\\s*\\r?\\n+)", "");
+        text = text.replaceAll("(?i)^(subject:\\s*[^\r\n]*\\r?\\n+)", ""); // Strip standalone subject lines
+
+        // Strip quotes if wrapped in entire double quotes
+        if (text.startsWith("\"") && text.endsWith("\"") && text.length() >= 2) {
+            text = text.substring(1, text.length() - 1).trim();
+        }
+
+        return text.trim();
     }
 
     public DraftResult generateDraftFallback(String customerName, Long amount, String currency, String failureCategory, int daysSinceFailure, Throwable t) {

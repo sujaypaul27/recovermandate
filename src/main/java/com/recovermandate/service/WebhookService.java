@@ -18,6 +18,7 @@ import com.recovermandate.repository.PlanRepository;
 import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.repository.SubscriptionRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class WebhookService {
     private final ObjectMapper objectMapper;
     private final PaymentLinkRepository paymentLinkRepository;
     private final RecoveryActionRepository recoveryActionRepository;
+    private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
 
     /**
      * Handles a verified Razorpay webhook event.
@@ -183,6 +185,8 @@ public class WebhookService {
                 handlePaymentLinkPaid(root, savedEvent);
             } else if ("payment_link.expired".equals(eventType)) {
                 handlePaymentLinkExpired(root, savedEvent);
+            } else if ("subscription.cancelled".equals(eventType) || "subscription.paused".equals(eventType) || "subscription.halted".equals(eventType)) {
+                handleSubscriptionStateChanged(root, eventType);
             }
 
             return savedEvent;
@@ -444,6 +448,29 @@ public class WebhookService {
             RecoveryAction action = link.getRecoveryAction();
             Long recoveredAmount = link.getAmount() != null ? link.getAmount() : (savedEvent != null && savedEvent.getAmount() != null ? savedEvent.getAmount() : 0L);
 
+            // Double-Charge Prevention: Cancel any PENDING retry schedules for this payment event / subscription
+            PaymentEvent event = (action != null && action.getFailureClassification() != null)
+                    ? action.getFailureClassification().getPaymentEvent()
+                    : savedEvent;
+
+            if (event != null && event.getId() != null) {
+                List<com.recovermandate.entity.RetrySchedule> pendingRetries = retryScheduleRepository.findByPaymentEventIdAndResult(event.getId(), "PENDING");
+                for (com.recovermandate.entity.RetrySchedule pendingRetry : pendingRetries) {
+                    pendingRetry.setResult("SKIPPED");
+                    pendingRetry.setExecutedAt(Instant.now());
+                    pendingRetry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
+                    retryScheduleRepository.save(pendingRetry);
+
+                    auditService.log(
+                            "RETRY_SCHEDULE",
+                            pendingRetry.getId(),
+                            "RETRY_CANCELLED_ALREADY_PAID",
+                            "SYSTEM",
+                            "Automated retry #" + pendingRetry.getAttemptNumber() + " cancelled because customer paid via Razorpay Payment Link " + razorpayLinkId
+                    );
+                }
+            }
+
             if (action != null) {
                 action.setStatus("RECOVERED");
                 recoveryActionRepository.save(action);
@@ -496,6 +523,20 @@ public class WebhookService {
             link.setStatus("EXPIRED");
             paymentLinkRepository.save(link);
 
+            RecoveryAction action = link.getRecoveryAction();
+            if (action != null) {
+                action.setStatus("LINK_EXPIRED");
+                recoveryActionRepository.save(action);
+
+                auditService.log(
+                        "RECOVERY_ACTION",
+                        action.getId(),
+                        "PAYMENT_LINK_EXPIRED_UNRECOVERED",
+                        "SYSTEM",
+                        "Payment link " + razorpayLinkId + " expired without customer settlement"
+                );
+            }
+
             auditService.log(
                     "PAYMENT_LINK",
                     link.getId(),
@@ -504,6 +545,51 @@ public class WebhookService {
                     "Payment link " + razorpayLinkId + " marked as EXPIRED"
             );
             log.info("Payment link marked as EXPIRED for linkId={}", razorpayLinkId);
+        }
+    }
+
+    private void handleSubscriptionStateChanged(JsonNode root, String eventType) {
+        JsonNode subEntity = root.path("payload").path("subscription").path("entity");
+        String subId = subEntity.hasNonNull("id") ? subEntity.get("id").asText() : extractSubscriptionId(root, root.path("payload").path("payment").path("entity"), subEntity);
+        if (subId == null || subId.isBlank()) {
+            return;
+        }
+
+        String newStatus = eventType.replace("subscription.", "").toLowerCase(java.util.Locale.ROOT);
+        Optional<Subscription> subOpt = subscriptionRepository.findByRazorpaySubscriptionId(subId);
+        if (subOpt.isPresent()) {
+            Subscription sub = subOpt.get();
+            if (!newStatus.equals(sub.getStatus())) {
+                sub.setStatus(newStatus);
+                subscriptionRepository.save(sub);
+            }
+
+            // Cancel any pending retries for this subscription
+            List<com.recovermandate.entity.RetrySchedule> pendingRetries = retryScheduleRepository.findByPaymentEventSubscriptionIdAndResult(sub.getId(), "PENDING");
+            for (com.recovermandate.entity.RetrySchedule retry : pendingRetries) {
+                retry.setResult("SKIPPED");
+                retry.setExecutedAt(Instant.now());
+                retry.setScheduleReason("SUBSCRIPTION_" + newStatus.toUpperCase(java.util.Locale.ROOT));
+                retryScheduleRepository.save(retry);
+
+                auditService.log(
+                        "RETRY_SCHEDULE",
+                        retry.getId(),
+                        "RETRY_SKIPPED_SUBSCRIPTION_INACTIVE",
+                        "SYSTEM",
+                        String.format("Retry #%d cancelled because subscription %s transitioned to %s",
+                                retry.getAttemptNumber(), subId, newStatus)
+                );
+            }
+
+            auditService.log(
+                    "SUBSCRIPTION",
+                    sub.getId(),
+                    "SUBSCRIPTION_STATUS_UPDATED",
+                    "SYSTEM",
+                    "Subscription " + subId + " status updated to " + newStatus + " via webhook"
+            );
+            log.info("Subscription {} status updated to {}, cancelled {} pending retries", subId, newStatus, pendingRetries.size());
         }
     }
 
