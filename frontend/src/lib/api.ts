@@ -33,6 +33,17 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+export interface RetryScheduleItem {
+  id: number;
+  attemptNumber: number;
+  scheduledAt: string;
+  executedAt?: string;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "SKIPPED";
+  scheduleReason?: string;
+  failureCategory?: string;
+  razorpayRetryPaymentId?: string;
+}
+
 export interface PaymentEventItem {
   id: number;
   razorpayPaymentId: string;
@@ -51,6 +62,7 @@ export interface PaymentEventItem {
   classificationCategory?: string;
   classificationStatus?: string;
   errorReason?: string;
+  retrySchedules?: RetryScheduleItem[];
 }
 
 export interface RecoveryActionItem {
@@ -365,6 +377,31 @@ export async function replayWebhookDlq(id: number): Promise<{ message: string; e
   }
   return res.json();
 }
+
+export async function triggerRetryNow(retryId: number): Promise<RetryScheduleItem> {
+  const res = await fetch(`${API_BASE_URL}/retries/${retryId}/trigger-now`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Failed to trigger retry" }));
+    throw new Error(err.error || "Failed to trigger retry");
+  }
+  return res.json();
+}
+
+export async function cancelRetry(retryId: number): Promise<RetryScheduleItem> {
+  const res = await fetch(`${API_BASE_URL}/retries/${retryId}/cancel`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Failed to cancel retry" }));
+    throw new Error(err.error || "Failed to cancel retry");
+  }
+  return res.json();
+}
+
 
 
 

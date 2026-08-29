@@ -28,6 +28,7 @@ import {
   type DashboardSummary,
 } from "../lib/api";
 import { RazorpayMark } from "../components/RazorpayLogo";
+import { formatINR } from "../lib/formatters";
 
 // ─── Animation Variants ───────────────────────────────────────────
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
@@ -546,7 +547,7 @@ function RecoveryFunnel({
       count: summary.paymentsRecovered || 0,
       icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
       color: "from-emerald-500 to-emerald-400",
-      description: `₹${Math.round(summary.recoveredAmount / 100).toLocaleString("en-IN")} settled`,
+      description: `${formatINR(summary.recoveredAmount)} settled`,
       highlight: true,
     },
   ];

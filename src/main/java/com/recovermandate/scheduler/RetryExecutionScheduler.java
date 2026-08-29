@@ -78,156 +78,173 @@ public class RetryExecutionScheduler {
         log.info("Processing {} due retry attempts", dueRetries.size());
 
         for (RetrySchedule retry : dueRetries) {
-            PaymentEvent event = retry.getPaymentEvent();
+            executeSingleRetry(retry, false);
+        }
+    }
 
-            // 1. Subscription Inactive Guard
-            if (event != null && event.getSubscription() != null) {
-                String subStatus = event.getSubscription().getStatus();
-                if ("cancelled".equalsIgnoreCase(subStatus) || "halted".equalsIgnoreCase(subStatus) || "paused".equalsIgnoreCase(subStatus)) {
-                    log.info("Skipping retry id={} because subscription is {}", retry.getId(), subStatus);
-                    retry.setResult("SKIPPED");
-                    retry.setExecutedAt(Instant.now());
-                    retry.setScheduleReason("SUBSCRIPTION_" + subStatus.toUpperCase());
-                    retryScheduleRepository.save(retry);
+    /**
+     * Executes an individual retry attempt with full domain safety guards (inactive subscription check,
+     * double-charge prevention, bank health status, simulated gateway response, and closed-loop link revocation).
+     *
+     * @param retry the retry schedule entity to execute
+     * @param manualOverride true if invoked manually by a human support operator
+     * @return the updated retry schedule entity
+     */
+    @Transactional
+    public RetrySchedule executeSingleRetry(RetrySchedule retry, boolean manualOverride) {
+        PaymentEvent event = retry.getPaymentEvent();
+        String actor = manualOverride ? "HUMAN" : "SYSTEM";
 
-                    auditService.log(
-                            "RETRY_SCHEDULE",
-                            retry.getId(),
-                            "RETRY_SKIPPED_SUBSCRIPTION_INACTIVE",
-                            "SYSTEM",
-                            String.format("Skipped retry attempt #%d because subscription is %s",
-                                    retry.getAttemptNumber(), subStatus)
-                    );
-                    continue;
-                }
-            }
-
-            // 2. Double-Charge Prevention Guard: Check if payment link was already PAID / RECOVERED
-            if (event != null && recoveryActionRepository != null) {
-                Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(event);
-                if (actionOpt.isPresent()) {
-                    RecoveryAction action = actionOpt.get();
-                    if ("RECOVERED".equalsIgnoreCase(action.getStatus()) || "PAID".equalsIgnoreCase(action.getStatus())) {
-                        log.info("Skipping retry id={} because mandate is already recovered via payment link", retry.getId());
-                        retry.setResult("SKIPPED");
-                        retry.setExecutedAt(Instant.now());
-                        retry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
-                        retryScheduleRepository.save(retry);
-
-                        auditService.log(
-                                "RETRY_SCHEDULE",
-                                retry.getId(),
-                                "RETRY_CANCELLED_ALREADY_PAID",
-                                "SYSTEM",
-                                "Retry #" + retry.getAttemptNumber() + " cancelled because payment was already recovered via payment link"
-                        );
-                        continue;
-                    }
-                }
-            }
-
-            // 3. Bank Health Guard
-            String bankCode = bankHealthService.extractBankCode(event);
-            String health = bankHealthService.getBankHealth(bankCode);
-
-            if ("DOWN".equalsIgnoreCase(health)) {
-                log.warn("Skipping retry id={} (attempt #{}) because bank {} is DOWN",
-                        retry.getId(), retry.getAttemptNumber(), bankCode);
+        // 1. Subscription Inactive Guard
+        if (event != null && event.getSubscription() != null) {
+            String subStatus = event.getSubscription().getStatus();
+            if ("cancelled".equalsIgnoreCase(subStatus) || "halted".equalsIgnoreCase(subStatus) || "paused".equalsIgnoreCase(subStatus)) {
+                log.info("Skipping retry id={} because subscription is {}", retry.getId(), subStatus);
                 retry.setResult("SKIPPED");
                 retry.setExecutedAt(Instant.now());
-                retry.setScheduleReason("BANK_" + bankCode + "_DOWN");
-                retryScheduleRepository.save(retry);
+                retry.setScheduleReason("SUBSCRIPTION_" + subStatus.toUpperCase());
+                RetrySchedule saved = retryScheduleRepository.save(retry);
 
                 auditService.log(
                         "RETRY_SCHEDULE",
                         retry.getId(),
-                        "RETRY_SKIPPED_BANK_DOWN",
-                        "SYSTEM",
-                        String.format("Skipped attempt #%d for event %d because bank %s is DOWN",
-                                retry.getAttemptNumber(),
-                                event != null ? event.getId() : 0L,
-                                bankCode)
+                        "RETRY_SKIPPED_SUBSCRIPTION_INACTIVE",
+                        actor,
+                        String.format("Skipped retry attempt #%d because subscription is %s",
+                                retry.getAttemptNumber(), subStatus)
                 );
-            } else {
-                // Determine simulated failure rate based on bank health
-                double failureRate;
-                if ("DEGRADED".equalsIgnoreCase(health)) {
-                    failureRate = 0.65; // 65% failure rate for degraded banks
-                } else if ("HEALTHY".equalsIgnoreCase(health)) {
-                    failureRate = 0.30; // ~30% standard failure rate
-                } else {
-                    failureRate = 0.50; // default 50% for unknown state
+                return saved;
+            }
+        }
+
+        // 2. Double-Charge Prevention Guard: Check if payment link was already PAID / RECOVERED
+        if (event != null && recoveryActionRepository != null) {
+            Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(event);
+            if (actionOpt.isPresent()) {
+                RecoveryAction action = actionOpt.get();
+                if ("RECOVERED".equalsIgnoreCase(action.getStatus()) || "PAID".equalsIgnoreCase(action.getStatus())) {
+                    log.info("Skipping retry id={} because mandate is already recovered via payment link", retry.getId());
+                    retry.setResult("SKIPPED");
+                    retry.setExecutedAt(Instant.now());
+                    retry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
+                    RetrySchedule saved = retryScheduleRepository.save(retry);
+
+                    auditService.log(
+                            "RETRY_SCHEDULE",
+                            retry.getId(),
+                            "RETRY_CANCELLED_ALREADY_PAID",
+                            actor,
+                            "Retry #" + retry.getAttemptNumber() + " cancelled because payment was already recovered via payment link"
+                    );
+                    return saved;
                 }
+            }
+        }
 
-                boolean isFailure = random.nextDouble() < failureRate;
+        // 3. Bank Health Guard (if automated, skip if DOWN; if manual override, bypass)
+        String bankCode = bankHealthService.extractBankCode(event);
+        String health = bankHealthService.getBankHealth(bankCode);
 
-                if (isFailure) {
-                    log.warn("Simulated retry failure for id={} (attempt #{}) for bank {} (health: {})",
-                            retry.getId(), retry.getAttemptNumber(), bankCode, health);
-                    retry.setResult("FAILED");
-                    retry.setExecutedAt(Instant.now());
-                    retryScheduleRepository.save(retry);
+        if (!manualOverride && "DOWN".equalsIgnoreCase(health)) {
+            log.warn("Skipping retry id={} (attempt #{}) because bank {} is DOWN",
+                    retry.getId(), retry.getAttemptNumber(), bankCode);
+            retry.setResult("SKIPPED");
+            retry.setExecutedAt(Instant.now());
+            retry.setScheduleReason("BANK_" + bankCode + "_DOWN");
+            RetrySchedule saved = retryScheduleRepository.save(retry);
 
-                    auditService.log(
-                            "RETRY_SCHEDULE",
-                            retry.getId(),
-                            "RETRY_EXECUTED_FAILED",
-                            "SYSTEM",
-                            String.format("Executed retry attempt #%d with FAILED outcome against bank %s (health: %s)",
-                                    retry.getAttemptNumber(),
-                                    bankCode,
-                                    health)
-                    );
-                } else {
-                    log.info("Executing retry id={} (attempt #{}) successfully for bank {} (health: {})",
-                            retry.getId(), retry.getAttemptNumber(), bankCode, health);
+            auditService.log(
+                    "RETRY_SCHEDULE",
+                    retry.getId(),
+                    "RETRY_SKIPPED_BANK_DOWN",
+                    "SYSTEM",
+                    String.format("Skipped attempt #%d for event %d because bank %s is DOWN",
+                            retry.getAttemptNumber(),
+                            event != null ? event.getId() : 0L,
+                            bankCode)
+            );
+            return saved;
+        }
 
-                    String simulatedPaymentId = "pay_retry_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-                    retry.setResult("SUCCESS");
-                    retry.setExecutedAt(Instant.now());
-                    retry.setRazorpayRetryPaymentId(simulatedPaymentId);
-                    retryScheduleRepository.save(retry);
+        // Determine simulated failure rate based on bank health
+        double failureRate;
+        if ("DEGRADED".equalsIgnoreCase(health)) {
+            failureRate = 0.65; // 65% failure rate for degraded banks
+        } else if ("HEALTHY".equalsIgnoreCase(health)) {
+            failureRate = 0.30; // ~30% standard failure rate
+        } else {
+            failureRate = 0.50; // default 50% for unknown state
+        }
 
-                    auditService.log(
-                            "RETRY_SCHEDULE",
-                            retry.getId(),
-                            "RETRY_EXECUTED_SUCCESS",
-                            "SYSTEM",
-                            String.format("Executed retry attempt #%d with simulated retry payment ID %s (bank: %s, health: %s)",
-                                    retry.getAttemptNumber(),
-                                    simulatedPaymentId,
-                                    bankCode,
-                                    health)
-                    );
+        boolean isFailure = random.nextDouble() < failureRate;
 
-                    // 4. Closed-Loop Cancellation: Supersede any active Razorpay Payment Link for this mandate
-                    if (event != null && recoveryActionRepository != null && paymentLinkRepository != null) {
-                        Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(event);
-                        if (actionOpt.isPresent()) {
-                            RecoveryAction action = actionOpt.get();
-                            Optional<PaymentLink> linkOpt = paymentLinkRepository.findByRecoveryAction(action);
-                            if (linkOpt.isPresent()) {
-                                PaymentLink link = linkOpt.get();
-                                if ("CREATED".equalsIgnoreCase(link.getStatus()) || "DISPATCHED".equalsIgnoreCase(link.getStatus())) {
-                                    link.setStatus("SUPERSEDED");
-                                    paymentLinkRepository.save(link);
-                                    if (razorpayApiClient != null) {
-                                        razorpayApiClient.cancelPaymentLink(link.getRazorpayLinkId());
-                                    }
+        if (isFailure) {
+            log.warn("Simulated retry failure for id={} (attempt #{}) for bank {} (health: {})",
+                    retry.getId(), retry.getAttemptNumber(), bankCode, health);
+            retry.setResult("FAILED");
+            retry.setExecutedAt(Instant.now());
+            RetrySchedule saved = retryScheduleRepository.save(retry);
 
-                                    auditService.log(
-                                            "PAYMENT_LINK",
-                                            link.getId(),
-                                            "PAYMENT_LINK_SUPERSEDED_BY_RETRY",
-                                            "SYSTEM",
-                                            "Payment link " + link.getRazorpayLinkId() + " marked SUPERSEDED after automated retry #" + retry.getAttemptNumber() + " succeeded"
-                                    );
-                                }
+            auditService.log(
+                    "RETRY_SCHEDULE",
+                    retry.getId(),
+                    "RETRY_EXECUTED_FAILED",
+                    actor,
+                    String.format("Executed retry attempt #%d with FAILED outcome against bank %s (health: %s)",
+                            retry.getAttemptNumber(),
+                            bankCode,
+                            health)
+            );
+            return saved;
+        } else {
+            log.info("Executing retry id={} (attempt #{}) successfully for bank {} (health: {})",
+                    retry.getId(), retry.getAttemptNumber(), bankCode, health);
+
+            String simulatedPaymentId = "pay_retry_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            retry.setResult("SUCCESS");
+            retry.setExecutedAt(Instant.now());
+            retry.setRazorpayRetryPaymentId(simulatedPaymentId);
+            RetrySchedule saved = retryScheduleRepository.save(retry);
+
+            auditService.log(
+                    "RETRY_SCHEDULE",
+                    retry.getId(),
+                    "RETRY_EXECUTED_SUCCESS",
+                    actor,
+                    String.format("Executed retry attempt #%d with simulated retry payment ID %s (bank: %s, health: %s)",
+                            retry.getAttemptNumber(),
+                            simulatedPaymentId,
+                            bankCode,
+                            health)
+            );
+
+            // 4. Closed-Loop Cancellation: Supersede any active Razorpay Payment Link for this mandate
+            if (event != null && recoveryActionRepository != null && paymentLinkRepository != null) {
+                Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(event);
+                if (actionOpt.isPresent()) {
+                    RecoveryAction action = actionOpt.get();
+                    Optional<PaymentLink> linkOpt = paymentLinkRepository.findByRecoveryAction(action);
+                    if (linkOpt.isPresent()) {
+                        PaymentLink link = linkOpt.get();
+                        if ("CREATED".equalsIgnoreCase(link.getStatus()) || "DISPATCHED".equalsIgnoreCase(link.getStatus())) {
+                            link.setStatus("SUPERSEDED");
+                            paymentLinkRepository.save(link);
+                            if (razorpayApiClient != null) {
+                                razorpayApiClient.cancelPaymentLink(link.getRazorpayLinkId());
                             }
+
+                            auditService.log(
+                                    "PAYMENT_LINK",
+                                    link.getId(),
+                                    "PAYMENT_LINK_SUPERSEDED_BY_RETRY",
+                                    actor,
+                                    "Payment link " + link.getRazorpayLinkId() + " marked SUPERSEDED after automated retry #" + retry.getAttemptNumber() + " succeeded"
+                            );
                         }
                     }
                 }
             }
+            return saved;
         }
     }
 }

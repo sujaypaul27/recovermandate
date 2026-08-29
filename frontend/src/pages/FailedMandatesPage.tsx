@@ -25,6 +25,9 @@ import {
 } from "../lib/api";
 import { TransactionFlowDiagram } from "../components/TransactionFlowDiagram";
 import { RazorpayMark } from "../components/RazorpayLogo";
+import { SmartRetryTimeline } from "../components/SmartRetryTimeline";
+import { EmptyState } from "../components/EmptyState";
+import { formatINR } from "../lib/formatters";
 
 function getCategoryClass(cat: string | null | undefined) {
   if (!cat) return "";
@@ -126,7 +129,7 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Failed Mandates Log</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Live feed of caught Razorpay webhook events. Click any row to inspect the lifecycle flow.
+              Live feed of caught Razorpay webhook events. Click any row to inspect the lifecycle flow & retry schedule.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -204,32 +207,26 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-2">
-                <Search className="w-8 h-8 text-slate-400" />
-              </div>
-              <p className="font-bold text-lg text-slate-900 dark:text-white">
-                {rawItems.length === 0 ? "No failed mandates found" : "No mandates match your filters"}
-              </p>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 max-w-sm">
-                {rawItems.length === 0
-                  ? "Payment failures intercepted from Razorpay webhooks will stream here live."
-                  : "Try clearing your search query or selecting a broader date range."}
-              </p>
-              {(searchQuery || dateRange !== "all") && (
-                <Button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setDateRange("all");
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                >
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              variant={searchQuery || dateRange !== "all" ? "search" : "clean"}
+              title={rawItems.length === 0 ? "No Failed Mandates Intercepted" : "No Matching Mandates"}
+              description={
+                rawItems.length === 0
+                  ? "Webhook events from Razorpay subscription payments will automatically stream here with AI failure classifications."
+                  : "No mandates matched your current filter criteria. Try clearing search keywords or expanding the time window."
+              }
+              action={
+                searchQuery || dateRange !== "all"
+                  ? {
+                      label: "Clear Filters",
+                      onClick: () => {
+                        setSearchQuery("");
+                        setDateRange("all");
+                      },
+                    }
+                  : undefined
+              }
+            />
           ) : (
             <>
               {/* Desktop Table */}
@@ -263,7 +260,7 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                               {item.razorpayPaymentId}
                             </TableCell>
                             <TableCell className="font-bold text-slate-900 dark:text-white">
-                              ₹{(item.amount / 100).toFixed(2)}
+                              {formatINR(item.amount)}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={`text-xs font-semibold border ${getCategoryClass(item.classificationCategory)}`}>
@@ -292,7 +289,7 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                             </TableCell>
                           </motion.tr>
 
-                          {/* Expanded Flow Diagram Row */}
+                          {/* Expanded Flow Diagram & Smart Retry Schedule Row */}
                           {isExpanded && (
                             <tr>
                               <td colSpan={6} className="p-4 bg-[#02042B]/90 border-b border-[#3395FF]/30 space-y-4">
@@ -301,6 +298,13 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                                   category={item.classificationCategory}
                                   failureReasonCode={item.failureReasonCode}
                                   autoRecoverable={item.autoRecoverable}
+                                />
+
+                                {/* Smart Retry Engine Schedule Timeline */}
+                                <SmartRetryTimeline
+                                  schedules={item.retrySchedules}
+                                  paymentEventId={item.id}
+                                  onUpdate={load}
                                 />
 
                                 {/* Razorpay Link Card */}
@@ -366,7 +370,7 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                     >
                       <div className="flex justify-between items-center" onClick={() => toggleExpand(item.id)}>
                         <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-medium">{item.razorpayPaymentId}</span>
-                        <span className="font-bold text-slate-900 dark:text-white text-lg">₹{(item.amount / 100).toFixed(2)}</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-lg">{formatINR(item.amount)}</span>
                       </div>
                       <div className="flex justify-between items-center" onClick={() => toggleExpand(item.id)}>
                         <Badge variant="outline" className={`text-[10px] font-bold border ${getCategoryClass(item.classificationCategory)}`}>
@@ -381,12 +385,17 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                         )}
                       </div>
                       {isExpanded && (
-                        <div className="pt-2">
+                        <div className="pt-2 space-y-3">
                           <TransactionFlowDiagram
                             failurePoint={item.classificationCategory}
                             category={item.classificationCategory}
                             failureReasonCode={item.failureReasonCode}
                             autoRecoverable={item.autoRecoverable}
+                          />
+                          <SmartRetryTimeline
+                            schedules={item.retrySchedules}
+                            paymentEventId={item.id}
+                            onUpdate={load}
                           />
                         </div>
                       )}

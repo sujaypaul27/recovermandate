@@ -9,7 +9,6 @@ import {
   User,
   Bot,
   Activity,
-  List,
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
@@ -26,7 +25,6 @@ import {
   Eye,
   Copy,
   Check,
-  Inbox,
   ShieldAlert,
 } from "lucide-react";
 import {
@@ -39,6 +37,8 @@ import {
   type AuditLogItem,
   type WebhookDlqItem,
 } from "../lib/api";
+import { EmptyState } from "../components/EmptyState";
+import { formatDateIST } from "../lib/formatters";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp = {
@@ -346,25 +346,26 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                 ))}
               </div>
             ) : filteredItems.length === 0 ? (
-              <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
-                <List className="w-10 h-10 text-slate-400" />
-                <p className="font-bold text-lg text-slate-900 dark:text-white">
-                  {rawItems.length === 0 ? "No audit logs found" : "No logs match your filters"}
-                </p>
-                {(searchQuery || dateRange !== "all") && (
-                  <Button
-                    onClick={() => {
-                      setSearchQuery("");
-                      setDateRange("all");
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs mt-2"
-                  >
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
+              <EmptyState
+                variant={searchQuery || dateRange !== "all" ? "search" : "shield"}
+                title={rawItems.length === 0 ? "No Audit Trail Recorded" : "No Matching Audit Entries"}
+                description={
+                  rawItems.length === 0
+                    ? "Cryptographically chained immutable audit records will appear here as webhooks, AI decisions, and payments process."
+                    : "No audit records matched your filter query. Try clearing your search or selecting All Time."
+                }
+                action={
+                  searchQuery || dateRange !== "all"
+                    ? {
+                        label: "Clear Filters",
+                        onClick: () => {
+                          setSearchQuery("");
+                          setDateRange("all");
+                        },
+                      }
+                    : undefined
+                }
+              />
             ) : (
               <ScrollArea className="h-[600px] pr-4">
                 <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 timeline-line ml-2">
@@ -401,7 +402,7 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                               )}
                             </div>
                             <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 font-mono tabular-nums shrink-0">
-                              {new Date(log.timestamp).toLocaleString()}
+                              {formatDateIST(log.timestamp)}
                             </span>
                           </div>
 
@@ -507,13 +508,12 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                 ))}
               </div>
             ) : dlqItems.length === 0 ? (
-              <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
-                <Inbox className="w-10 h-10 text-slate-400" />
-                <p className="font-bold text-lg text-slate-900 dark:text-white">DLQ Queue is Clean</p>
-                <p className="text-xs text-slate-500 max-w-md">
-                  No rejected, unparseable, or signature-failed webhooks have been intercepted. All incoming webhooks have passed HMAC signature validation.
-                </p>
-              </div>
+              <EmptyState
+                variant="shield"
+                title="DLQ Quarantine Clean"
+                description="No rejected, unparseable, or signature-failed webhooks have been intercepted. All incoming webhooks have passed HMAC signature validation."
+                badgeText="Zero Dropped Webhooks"
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
@@ -533,7 +533,7 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                           #{item.id}
                         </td>
                         <td className="py-3.5 px-3 font-mono text-slate-500">
-                          {new Date(item.createdAt).toLocaleString()}
+                          {formatDateIST(item.createdAt)}
                         </td>
                         <td className="py-3.5 px-3 text-rose-600 dark:text-rose-400 font-medium max-w-xs truncate" title={item.errorMessage}>
                           {item.errorMessage || "Unknown error"}

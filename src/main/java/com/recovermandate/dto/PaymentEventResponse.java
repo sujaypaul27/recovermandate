@@ -24,4 +24,7 @@ public class PaymentEventResponse {
     private String classificationCategory;
     private Boolean autoRecoverable;
     private String classificationStatus; // E.g. COMPLETED, PENDING, or the RecoveryAction status
+
+    // Smart Retry Schedules
+    private java.util.List<RetryScheduleDto> retrySchedules;
 }

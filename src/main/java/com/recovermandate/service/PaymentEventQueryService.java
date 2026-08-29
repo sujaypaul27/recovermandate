@@ -21,6 +21,7 @@ public class PaymentEventQueryService {
     private final PaymentEventRepository paymentEventRepository;
     private final FailureClassificationRepository failureClassificationRepository;
     private final RecoveryActionRepository recoveryActionRepository;
+    private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
 
     public Page<PaymentEventResponse> getPaymentEvents(String category, String status, Pageable pageable) {
         Page<PaymentEvent> events = paymentEventRepository.findByFilters(category, status, pageable);
@@ -51,6 +52,31 @@ public class PaymentEventQueryService {
             } else {
                 response.setClassificationStatus("PENDING_DRAFT");
             }
+        }
+
+        // Map associated retry schedules
+        if (event.getId() != null && retryScheduleRepository != null) {
+            java.util.List<com.recovermandate.entity.RetrySchedule> schedules =
+                    retryScheduleRepository.findByPaymentEventIdOrderByAttemptNumberAsc(event.getId());
+            if (schedules != null && !schedules.isEmpty()) {
+                java.util.List<com.recovermandate.dto.RetryScheduleDto> dtos = schedules.stream()
+                        .map(s -> com.recovermandate.dto.RetryScheduleDto.builder()
+                                .id(s.getId())
+                                .attemptNumber(s.getAttemptNumber())
+                                .scheduledAt(s.getScheduledAt())
+                                .executedAt(s.getExecutedAt())
+                                .status(s.getResult())
+                                .scheduleReason(s.getScheduleReason())
+                                .failureCategory(s.getFailureCategory())
+                                .razorpayRetryPaymentId(s.getRazorpayRetryPaymentId())
+                                .build())
+                        .toList();
+                response.setRetrySchedules(dtos);
+            } else {
+                response.setRetrySchedules(java.util.Collections.emptyList());
+            }
+        } else {
+            response.setRetrySchedules(java.util.Collections.emptyList());
         }
 
         return response;

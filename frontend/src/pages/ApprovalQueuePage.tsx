@@ -32,6 +32,8 @@ import {
   type RecoveryActionItem,
 } from "../lib/api";
 import { RazorpayMark, RazorpayBadge } from "../components/RazorpayLogo";
+import { EmptyState } from "../components/EmptyState";
+import { formatINR } from "../lib/formatters";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = {
@@ -119,8 +121,8 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
 
   const pendingActions = data?.content || [];
   const safeActions = pendingActions.filter((a) => !a.amount || a.amount <= 250000);
-  const totalSafeValue = safeActions.reduce(
-    (acc, a) => acc + (a.amount ? a.amount / 100 : 499),
+  const totalSafeValuePaise = safeActions.reduce(
+    (acc, a) => acc + (a.amount != null ? a.amount : 49900),
     0
   );
 
@@ -193,7 +195,7 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
               className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold gap-2 shadow-lg shadow-emerald-500/20"
             >
               <Zap className="w-3.5 h-3.5 text-amber-300" />
-              Approve All Safe (&lt; ₹2,500) — {safeActions.length} Actions (₹{Math.round(totalSafeValue).toLocaleString("en-IN")})
+              Approve All Safe (&lt; ₹2,500) — {safeActions.length} Actions ({formatINR(totalSafeValuePaise, false)})
             </Button>
           </div>
         )}
@@ -233,7 +235,7 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
                 </div>
                 <div className="flex justify-between text-slate-300 pb-2 border-b border-slate-800">
                   <span>Total Recoverable Value:</span>
-                  <span className="text-emerald-400 font-bold">₹{Math.round(totalSafeValue).toLocaleString("en-IN")}</span>
+                  <span className="text-emerald-400 font-bold">{formatINR(totalSafeValuePaise)}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
                   <span>Safety Criteria:</span>
@@ -292,14 +294,13 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
           ))}
         </div>
       ) : !data || data.content.length === 0 ? (
-        <div className="py-20 flex flex-col items-center justify-center text-center space-y-4 glass-card rounded-2xl bg-[#0C2340]/40 border-[#3395FF]/20">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2 shadow-lg shadow-emerald-500/20">
-            <CheckCircle className="w-8 h-8" />
-          </div>
-          <p className="font-bold text-xl text-slate-900 dark:text-white">Approval Queue Clear</p>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 max-w-sm">
-            All AI-generated recovery drafts have been approved or dispatched.
-          </p>
+        <div className="glass-card rounded-2xl overflow-hidden shadow-xl">
+          <EmptyState
+            variant="shield"
+            title="Approval Queue Clear"
+            description="All AI-generated recovery drafts have been reviewed, dispatched, or automatically resolved via Auto-Pilot."
+            badgeText="Zero Pending Drafts"
+          />
         </div>
       ) : (
         data.content.map((action: RecoveryActionItem) => (
