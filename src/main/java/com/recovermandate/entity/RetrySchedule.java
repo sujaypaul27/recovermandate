@@ -52,6 +52,9 @@ public class RetrySchedule {
     @Column(name = "razorpay_retry_payment_id")
     private String razorpayRetryPaymentId;
 
+    @Column(name = "schedule_reason")
+    private String scheduleReason;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }

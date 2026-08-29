@@ -187,12 +187,25 @@ export function TransactionFlowDiagram({
               <div className="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs font-mono text-slate-300 space-y-2">
                 <div className="flex justify-between items-center text-[11px] text-slate-400 pb-2 border-b border-slate-800/80">
                   <span>Category: <strong className="text-blue-400">{category || "UNKNOWN"}</strong></span>
-                  <span>Reason Code: <strong className="text-amber-400">{failureReasonCode || "BAD_REQUEST_ERROR"}</strong></span>
+                  <span>Reason: <strong className="text-amber-400">{failureReasonCode || "BAD_REQUEST_ERROR"}</strong></span>
                 </div>
                 <p className="leading-relaxed text-slate-300">
                   {diagnosis ||
                     `Payment failure intercepted at the ${failingKey.toUpperCase()} tier due to '${category || "Technical Decline"}'. Intelligent retry and customer drafting pipeline initialized.`}
                 </p>
+
+                {/* Indian Banking Rail Heuristic Strategy */}
+                <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-[#3395FF]">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="font-bold">Smart Retry Strategy (Indian Banking Rails):</span>
+                  </div>
+                  <span className="text-slate-400 font-mono text-[10px]">
+                    {category?.toLowerCase().includes("insufficient")
+                      ? "Salary Credit Liquidity Window (10:00 AM IST)"
+                      : "Avoiding PSU CBS (11:30 PM–3:30 AM) & Peak UPI (7:00–9:30 PM)"}
+                  </span>
+                </div>
               </div>
             </motion.div>
           )}

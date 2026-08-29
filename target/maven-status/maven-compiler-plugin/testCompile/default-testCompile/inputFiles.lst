@@ -11,6 +11,7 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\RecoveryActionControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\SearchControllerTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\controller\SseControllerTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\heuristic\RecoveryWindowCalculatorTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\AIValidationIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\FailureClassificationIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\SecurityIntegrationTest.java

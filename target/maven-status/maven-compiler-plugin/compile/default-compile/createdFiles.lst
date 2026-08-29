@@ -20,7 +20,6 @@ com\recovermandate\dto\AuditLogResponse.class
 com\recovermandate\service\WebhookService.class
 com\recovermandate\entity\PaymentEvent$PaymentEventBuilder.class
 com\recovermandate\service\DashboardService.class
-com\recovermandate\service\RetrySchedulerService.class
 com\recovermandate\service\AuditQueryService.class
 com\recovermandate\dto\AuditLogResponse$AuditLogResponseBuilder.class
 com\recovermandate\repository\PlanRepository.class

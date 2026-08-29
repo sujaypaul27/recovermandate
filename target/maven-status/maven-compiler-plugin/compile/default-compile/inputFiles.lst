@@ -45,6 +45,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\Pla
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\RecoveryAction.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\RetrySchedule.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\Subscription.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\heuristic\RecoveryWindowCalculator.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\RecoverMandateApplication.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\AuditLogRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\BankHealthSnapshotRepository.java

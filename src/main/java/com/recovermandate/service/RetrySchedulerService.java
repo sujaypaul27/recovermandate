@@ -16,8 +16,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.recovermandate.heuristic.RecoveryWindowCalculator;
+import com.recovermandate.heuristic.RecoveryWindowCalculator.SuggestedRetryWindow;
+
 /**
- * Service to calculate and schedule algorithmic retry attempts based on failure category.
+ * Service to calculate and schedule deterministic retry attempts based on Indian banking rail heuristics.
  */
 @Slf4j
 @Service
@@ -28,7 +31,8 @@ public class RetrySchedulerService {
     private final AuditService auditService;
 
     /**
-     * Schedules retries for a failed payment event based on its classified failure category.
+     * Schedules smart retries for a failed payment event based on its classified failure category
+     * and Indian banking rail heuristics (CBS maintenance, salary credit, UPI peak avoidance).
      *
      * @param event          the failed PaymentEvent
      * @param classification the deterministic FailureClassification
@@ -42,26 +46,27 @@ public class RetrySchedulerService {
         }
 
         String category = classification.getCategory() != null ? classification.getCategory() : "unknown";
-        List<Duration> retryOffsets = getRetryOffsets(category);
+        int totalAttempts = getAttemptCount(category);
 
-        if (retryOffsets.isEmpty()) {
+        if (totalAttempts == 0) {
             log.info("No retries scheduled for category '{}' on event id={}", category, event.getId());
             return Collections.emptyList();
         }
 
         Instant now = Instant.now();
+        Instant failureTime = event.getReceivedAt() != null ? event.getReceivedAt() : now;
         List<RetrySchedule> schedules = new ArrayList<>();
 
-        for (int i = 0; i < retryOffsets.size(); i++) {
-            Duration offset = retryOffsets.get(i);
+        for (int i = 0; i < totalAttempts; i++) {
             int attemptNumber = i + 1;
-            Instant scheduledAt = now.plus(offset);
+            SuggestedRetryWindow window = RecoveryWindowCalculator.calculateOptimalWindow(failureTime, category, attemptNumber);
 
             RetrySchedule schedule = RetrySchedule.builder()
                     .paymentEvent(event)
                     .failureCategory(category)
                     .attemptNumber(attemptNumber)
-                    .scheduledAt(scheduledAt)
+                    .scheduledAt(window.scheduledAt())
+                    .scheduleReason(window.reason())
                     .result("PENDING")
                     .createdAt(now)
                     .build();
@@ -72,32 +77,33 @@ public class RetrySchedulerService {
         log.info("Scheduled {} retries for event id={} under category '{}'",
                 schedules.size(), event.getId(), category);
 
+        String strategyReason = !schedules.isEmpty() && schedules.get(0).getScheduleReason() != null
+                ? schedules.get(0).getScheduleReason()
+                : "Scheduled via Indian banking rail settlement heuristic";
+
         auditService.log(
                 "PAYMENT_EVENT",
                 event.getId() != null ? event.getId() : 0L,
                 "RETRY_SCHEDULED",
                 "SYSTEM",
-                String.format("Scheduled %d retry attempt(s) for category '%s'", schedules.size(), category)
+                String.format("Scheduled %d retry attempt(s) for category '%s'. Strategy: %s",
+                        schedules.size(), category, strategyReason)
         );
 
         return schedules;
     }
 
-    private List<Duration> getRetryOffsets(String category) {
+    private int getAttemptCount(String category) {
         switch (category) {
             case FailureClassificationService.CATEGORY_INSUFFICIENT_FUNDS:
-                // 3 retries: Day 1, Day 3, Day 7
-                return List.of(Duration.ofDays(1), Duration.ofDays(3), Duration.ofDays(7));
+                return 3;
             case FailureClassificationService.CATEGORY_TECHNICAL_DECLINE:
-                // 3 retries: 5min, 30min, 2hr
-                return List.of(Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofHours(2));
+                return 3;
             case FailureClassificationService.CATEGORY_EXPIRED_MANDATE:
-                // 0 retries: no point retrying expired mandates
-                return Collections.emptyList();
+                return 0; // 0 retries: no point retrying expired mandates
             case FailureClassificationService.CATEGORY_UNKNOWN:
             default:
-                // 2 retries: 1hr, 24hr
-                return List.of(Duration.ofHours(1), Duration.ofHours(24));
+                return 2;
         }
     }
 }

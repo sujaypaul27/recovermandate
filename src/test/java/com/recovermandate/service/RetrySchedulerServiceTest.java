@@ -48,6 +48,8 @@ class RetrySchedulerServiceTest {
         assertEquals(2, schedules.get(1).getAttemptNumber());
         assertEquals(3, schedules.get(2).getAttemptNumber());
         assertEquals("PENDING", schedules.get(0).getResult());
+        assertNotNull(schedules.get(0).getScheduleReason());
+        assertNotNull(schedules.get(0).getScheduledAt());
 
         verify(auditService).log(
                 eq("PAYMENT_EVENT"),
