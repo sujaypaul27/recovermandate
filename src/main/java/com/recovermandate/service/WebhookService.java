@@ -53,6 +53,7 @@ public class WebhookService {
     private final PaymentLinkRepository paymentLinkRepository;
     private final RecoveryActionRepository recoveryActionRepository;
     private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * Handles a verified Razorpay webhook event.
@@ -166,6 +167,10 @@ public class WebhookService {
                             "Skipping failure classification because subscription is " + subscription.getStatus()
                     );
                 } else {
+                    if (applicationEventPublisher != null) {
+                        applicationEventPublisher.publishEvent(new com.recovermandate.event.PaymentFailedEvent(this, savedEvent));
+                    }
+
                     com.recovermandate.entity.FailureClassification classification = failureClassificationService.classify(savedEvent);
                     if (classification != null) {
                         sseService.broadcast("classification.complete", java.util.Map.of(

@@ -60,4 +60,7 @@ public class RecoveryAction {
 
     @Column(nullable = false)
     private String actor;
+
+    @jakarta.persistence.Version
+    private Long version;
 }

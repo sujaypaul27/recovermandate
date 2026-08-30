@@ -76,6 +76,9 @@ class WebhookServiceTest {
     @Mock
     private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
 
@@ -96,7 +99,8 @@ class WebhookServiceTest {
                 objectMapper,
                 paymentLinkRepository,
                 recoveryActionRepository,
-                retryScheduleRepository
+                retryScheduleRepository,
+                applicationEventPublisher
         );
     }
 

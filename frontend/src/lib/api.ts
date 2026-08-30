@@ -402,6 +402,48 @@ export async function cancelRetry(retryId: number): Promise<RetryScheduleItem> {
   return res.json();
 }
 
+export interface CheckoutDetails {
+  linkId: string;
+  paymentEventId?: number;
+  amount: number;
+  currency: string;
+  customerName: string;
+  customerEmail: string;
+  merchantName: string;
+  planName: string;
+  failureCategory?: string;
+  failureReason?: string;
+  aiExplanation?: string;
+  status: "CREATED" | "PAID" | "EXPIRED" | "SUPERSEDED";
+  expireBy?: string;
+  shortUrl?: string;
+}
 
+export async function fetchCheckoutDetails(linkId: string): Promise<CheckoutDetails> {
+  const res = await fetch(`${API_BASE_URL}/checkout/${linkId}`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Checkout not found" }));
+    throw new Error(err.error || "Failed to load checkout details");
+  }
+  return res.json();
+}
 
-
+export async function simulateCheckoutPayment(linkId: string): Promise<{
+  status: string;
+  paymentId: string;
+  message: string;
+  amount: number;
+  paidAt: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/checkout/${linkId}/pay`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Payment failed" }));
+    throw new Error(err.error || "Failed to simulate payment");
+  }
+  return res.json();
+}

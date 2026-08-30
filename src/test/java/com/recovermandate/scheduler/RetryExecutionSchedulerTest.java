@@ -67,17 +67,18 @@ class RetryExecutionSchedulerTest {
     }
 
     @Test
-    @DisplayName("Should skip retry if issuer bank is DOWN")
-    void executeDueRetries_skipsWhenDown() {
+    @DisplayName("Should defer retry by 60 minutes if issuer bank is DOWN")
+    void executeDueRetries_defersWhenDown() {
         PaymentEvent event = new PaymentEvent();
         event.setId(5L);
 
+        Instant originalScheduledAt = Instant.now().minusSeconds(10);
         RetrySchedule retry = RetrySchedule.builder()
                 .id(1L)
                 .paymentEvent(event)
                 .attemptNumber(1)
                 .result("PENDING")
-                .scheduledAt(Instant.now().minusSeconds(10))
+                .scheduledAt(originalScheduledAt)
                 .build();
 
         when(retryScheduleRepository.findByResultAndScheduledAtLessThanEqual(eq("PENDING"), any(), any()))
@@ -87,10 +88,11 @@ class RetryExecutionSchedulerTest {
 
         retryExecutionScheduler.executeDueRetries();
 
-        assertEquals("SKIPPED", retry.getResult());
-        assertNotNull(retry.getExecutedAt());
+        assertEquals("PENDING", retry.getResult());
+        assertTrue(retry.getScheduledAt().isAfter(originalScheduledAt));
+        assertEquals("RETRY_DEFERRED_BANK_HDFC_DOWN", retry.getScheduleReason());
         verify(retryScheduleRepository).save(retry);
-        verify(auditService).log(eq("RETRY_SCHEDULE"), eq(1L), eq("RETRY_SKIPPED_BANK_DOWN"), eq("SYSTEM"), contains("DOWN"));
+        verify(auditService).log(eq("RETRY_SCHEDULE"), eq(1L), eq("RETRY_DEFERRED_BANK_OUTAGE"), eq("SYSTEM"), contains("DOWN"));
     }
 
     @Test

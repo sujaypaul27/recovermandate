@@ -141,24 +141,23 @@ public class RetryExecutionScheduler {
             }
         }
 
-        // 3. Bank Health Guard (if automated, skip if DOWN; if manual override, bypass)
+        // 3. Bank Health Guard (if automated, defer if DOWN; if manual override, bypass)
         String bankCode = bankHealthService.extractBankCode(event);
         String health = bankHealthService.getBankHealth(bankCode);
 
         if (!manualOverride && "DOWN".equalsIgnoreCase(health)) {
-            log.warn("Skipping retry id={} (attempt #{}) because bank {} is DOWN",
-                    retry.getId(), retry.getAttemptNumber(), bankCode);
-            retry.setResult("SKIPPED");
-            retry.setExecutedAt(Instant.now());
-            retry.setScheduleReason("BANK_" + bankCode + "_DOWN");
+            log.warn("Bank {} is DOWN. Deferring retry id={} (attempt #{}) by 60 minutes",
+                    bankCode, retry.getId(), retry.getAttemptNumber());
+            retry.setScheduledAt(Instant.now().plus(60, java.time.temporal.ChronoUnit.MINUTES));
+            retry.setScheduleReason("RETRY_DEFERRED_BANK_" + bankCode + "_DOWN");
             RetrySchedule saved = retryScheduleRepository.save(retry);
 
             auditService.log(
                     "RETRY_SCHEDULE",
                     retry.getId(),
-                    "RETRY_SKIPPED_BANK_DOWN",
+                    "RETRY_DEFERRED_BANK_OUTAGE",
                     "SYSTEM",
-                    String.format("Skipped attempt #%d for event %d because bank %s is DOWN",
+                    String.format("Deferred retry attempt #%d for event %d by 60 minutes because bank %s is DOWN. Attempt counter preserved.",
                             retry.getAttemptNumber(),
                             event != null ? event.getId() : 0L,
                             bankCode)

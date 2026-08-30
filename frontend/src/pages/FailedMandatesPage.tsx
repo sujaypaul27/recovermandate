@@ -43,7 +43,15 @@ function getCategoryLabel(cat: string | null | undefined) {
   return cat.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
-export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number }) {
+interface FailedMandatesPageProps {
+  refreshTrigger?: number;
+  onOpenCheckout?: (paymentEventId: number) => void;
+}
+
+export function FailedMandatesPage({
+  refreshTrigger,
+  onOpenCheckout,
+}: FailedMandatesPageProps) {
   const [data, setData] = useState<PageResponse<PaymentEventItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -337,16 +345,21 @@ export function FailedMandatesPage({ refreshTrigger }: { refreshTrigger?: number
                                     >
                                       <Copy className="w-3.5 h-3.5 mr-1 text-[#3395FF]" /> Copy Link
                                     </Button>
-                                    <a
-                                      href={`https://rzp.io/simulated/pay_rec_${item.id}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
+                                    <Button
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onOpenCheckout) {
+                                          onOpenCheckout(item.id);
+                                        } else {
+                                          window.location.hash = `pay/pay_rec_${item.id}`;
+                                        }
+                                      }}
                                       className="h-8 px-2.5 rounded-lg bg-[#3395FF] hover:bg-[#2582eb] text-white flex items-center gap-1 text-xs font-bold transition-colors shadow-md shadow-[#3395FF]/20"
                                     >
                                       <span>Test Checkout</span>
                                       <ExternalLink className="w-3 h-3" />
-                                    </a>
+                                    </Button>
                                   </div>
                                 </div>
                               </td>

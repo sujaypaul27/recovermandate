@@ -27,6 +27,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { FailedMandatesPage } from "./pages/FailedMandatesPage";
 import { ApprovalQueuePage } from "./pages/ApprovalQueuePage";
 import { AuditLogPage } from "./pages/AuditLogPage";
+import { CustomerCheckoutPage } from "./pages/CustomerCheckoutPage";
 
 export default function App() {
   const [isRecoverMandateEnabled, setIsRecoverMandateEnabled] = useState(true);
@@ -34,6 +35,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [checkoutLinkId, setCheckoutLinkId] = useState<string | null>(null);
 
   // SSE Live Notification States
   const [hasNewFailedMandate, setHasNewFailedMandate] = useState(false);
@@ -65,6 +67,23 @@ export default function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [theme]);
+
+  // Check URL hash / query on load and on hashchange for /pay/:linkId
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      const pathname = window.location.pathname;
+      if (hash.startsWith("#pay/")) {
+        setCheckoutLinkId(hash.replace("#pay/", ""));
+      } else if (pathname.startsWith("/pay/")) {
+        setCheckoutLinkId(pathname.replace("/pay/", ""));
+      }
+    };
+
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   // Global keyboard shortcut for Command Palette (Ctrl+K / Cmd+K)
   useEffect(() => {
@@ -98,37 +117,30 @@ export default function App() {
         });
       } else if (eventType === "action.approved") {
         toast({
-          title: "Recovery Approved",
-          description: `Strategy #${data.actionId} approved. Recovery link generated.`,
+          title: "Action Approved",
+          description: `Recovery action #${data.actionId || ""} approved & signed.`,
         });
       } else if (eventType === "recovery.dispatched") {
         toast({
-          title: "Payment Link Dispatched",
-          description: `Razorpay recovery link dispatched to customer for action #${data.actionId}.`,
+          title: "Recovery Link Dispatched",
+          description: `Razorpay payment link dispatched via ${data.channel || "EMAIL"}.`,
         });
-      } else if (eventType === "recovery.completed") {
+      } else if (eventType === "payment.recovered") {
         toast({
-          title: "🎉 Mandate Saved & Revenue Recovered!",
-          description: `Customer completed payment of ₹${((data.amount || 0) / 100).toLocaleString("en-IN")}. Revenue recovered!`,
+          title: "🎉 Payment Recovered!",
+          description: `Customer completed payment via Razorpay link. Mandate restored!`,
         });
       }
     },
     [toast]
   );
 
-  // Connect to SSE Stream with API Key query parameter
-  // NOTE [ARCHITECTURAL LIMITATION]: Passing the API key in the query parameter (?apiKey=...) is an
-  // intentional design choice dictated by the W3C EventSource API specification, which does not allow
-  // custom HTTP request headers (such as 'X-API-Key') in standard browser EventSource implementations.
-  // This is a known browser API limitation rather than a security gap; ApiKeyAuthFilter supports both
-  // 'X-API-Key' headers and the 'apiKey' query parameter for this endpoint. In high-security production
-  // environments requiring strict header-only transport, an upgrade to WebSockets or ephemeral short-lived
-  // handshake tokens is the recommended path (out of scope for standard SSE streaming).
-  const sseUrl = `${API_BASE_URL.replace("/api", "")}/api/stream/events?apiKey=${encodeURIComponent(API_KEY)}`;
+  // Connect to SSE Endpoint
+  const sseUrl = `${API_BASE_URL}/events?apiKey=${encodeURIComponent(API_KEY)}`;
   useEventSource(sseUrl, handleSseEvent);
 
   const navItems = [
-    { id: "dashboard", label: "Overview", icon: LayoutDashboard },
+    { id: "dashboard", label: "Overview & ROI", icon: LayoutDashboard },
     {
       id: "mandates",
       label: "Failed Mandates",
@@ -150,103 +162,117 @@ export default function App() {
     if (tabId === "approvals") setPendingDraftCount(0);
   };
 
+  if (checkoutLinkId) {
+    return (
+      <>
+        <CustomerCheckoutPage
+          linkId={checkoutLinkId}
+          onBackToDashboard={() => {
+            setCheckoutLinkId(null);
+            window.location.hash = "";
+            setRefreshTrigger((prev) => prev + 1);
+          }}
+        />
+        <Toaster />
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Degraded State Alert Banner */}
-      <SystemHealthBanner />
+      <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#02042B] font-sans antialiased text-slate-900 dark:text-slate-100">
+        {/* Global Command Palette */}
+        <CommandPalette
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          onNavigate={(tab) => {
+            setActiveTab(tab);
+            setIsCommandPaletteOpen(false);
+          }}
+        />
 
-      {/* Global Command Palette */}
-      <CommandPalette
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onNavigate={handleTabChange}
-      />
+        {/* Merchant Settings Modal */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => {
+            setIsSettingsOpen(false);
+            setRefreshTrigger((prev) => prev + 1);
+          }}
+        />
 
-      {/* Merchant Settings & Auto-Pilot Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
-
-      {/* Background Mesh Layer */}
-      <div className="gradient-mesh-bg" aria-hidden="true">
-        <div className="ambient-blob ambient-blob-1" />
-        <div className="ambient-blob ambient-blob-2" />
-        <div className="ambient-blob ambient-blob-3" />
-      </div>
-
-      <div className="app-layout text-slate-900 dark:text-slate-100 antialiased">
         {/* Sidebar Navigation */}
-        <aside className="app-sidebar flex-col justify-between p-4">
-          <div>
-            {/* Official Razorpay Branding */}
-            <div className="flex items-center gap-3 px-2 py-4 mb-6">
-              <div className="w-11 h-11 rounded-xl bg-[#0C2340] border border-[#3395FF]/40 flex items-center justify-center shadow-lg shadow-[#3395FF]/20 shrink-0">
-                <RazorpayMark className="w-6 h-6" />
+        <aside className="app-sidebar hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#08182D]/80 backdrop-blur-xl shrink-0 z-20">
+          <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                <RazorpayMark className="w-6 h-6 text-white" />
               </div>
-              <div className="hidden lg:block">
-                <div className="flex items-center gap-1.5">
-                  <h1 className="text-lg font-extrabold tracking-tight text-white leading-none">
-                    Recover<span className="text-[#3395FF]">Mandate</span>
-                  </h1>
-                </div>
-                <div className="flex items-center gap-1 mt-1.5">
-                  <span className="text-[9px] uppercase font-bold tracking-wider text-[#93c5fd]/90">
-                    Powered by Razorpay Mandate Recovery Engine
-                  </span>
-                </div>
+              <div>
+                <h1 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
+                  RecoverMandate
+                </h1>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  Payment Recovery Engine
+                </p>
               </div>
             </div>
+          </div>
 
-            {/* Quick Search Button */}
-            <div className="hidden lg:block mb-4">
-              <button
-                onClick={() => setIsCommandPaletteOpen(true)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors group"
-              >
-                <div className="flex items-center gap-2">
-                  <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500" />
-                  <span>Search or Jump to...</span>
-                </div>
-                <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-[10px] font-mono text-slate-500 dark:text-slate-300">
-                  {isMac ? "⌘K" : "Ctrl+K"}
-                </kbd>
-              </button>
-            </div>
+          <div className="px-4 pt-4 pb-2">
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 transition-colors shadow-inner"
+            >
+              <div className="flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-blue-500" />
+                <span>Search or jump to...</span>
+              </div>
+              <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] font-mono font-bold">
+                {isMac ? "⌘K" : "Ctrl+K"}
+              </kbd>
+            </button>
+          </div>
 
-            {/* Nav Menu */}
-            <nav className="space-y-1 flex lg:flex-col lg:space-y-2 overflow-x-auto lg:overflow-visible">
-              {navItems.map((item) => (
+          <nav className="flex-1 px-3 py-3 space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
                 <button
                   key={item.id}
                   onClick={() => handleTabChange(item.id)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 ${
-                    activeTab === item.id
-                      ? "bg-blue-600/10 text-blue-700 dark:text-blue-400 border-l-2 border-blue-600 dark:border-blue-500 shadow-sm"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 border-l-2 border-transparent"
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon className="w-5 h-5 shrink-0" />
-                    <span className="hidden lg:inline-block">{item.label}</span>
+                    <Icon
+                      className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 ${
+                        isActive ? "text-white" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                      }`}
+                    />
+                    <span>{item.label}</span>
                   </div>
-
-                  {/* Badges / Live indicators */}
-                  {item.badge === "dot" && (
-                    <span className="w-2 h-2 rounded-full bg-blue-500 shadow-lg shadow-blue-500 animate-pulse ml-2" />
-                  )}
-                  {item.badge && item.badge !== "dot" && (
-                    <span className="hidden lg:inline-flex px-1.5 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold">
+                  {item.badge != null && (
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded-full transition-colors ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 animate-pulse"
+                      }`}
+                    >
                       {item.badge}
                     </span>
                   )}
                 </button>
-              ))}
-            </nav>
-          </div>
+              );
+            })}
+          </nav>
 
-          {/* Footer User Status */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 hidden lg:block">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <SystemHealthBanner />
             <div className="flex items-center gap-3 px-2 py-2">
               <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
                 <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -349,7 +375,15 @@ export default function App() {
                       onNavigate={handleTabChange}
                     />
                   )}
-                  {activeTab === "mandates" && <FailedMandatesPage refreshTrigger={refreshTrigger} />}
+                  {activeTab === "mandates" && (
+                    <FailedMandatesPage
+                      refreshTrigger={refreshTrigger}
+                      onOpenCheckout={(id) => {
+                        setCheckoutLinkId(`pay_rec_${id}`);
+                        window.location.hash = `pay/pay_rec_${id}`;
+                      }}
+                    />
+                  )}
                   {activeTab === "approvals" && <ApprovalQueuePage refreshTrigger={refreshTrigger} />}
                   {activeTab === "audit" && <AuditLogPage refreshTrigger={refreshTrigger} />}
                 </motion.div>
