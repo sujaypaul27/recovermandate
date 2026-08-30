@@ -9,6 +9,9 @@ import {
   ArrowRight,
   X,
   CreditCard,
+  ShieldCheck,
+  Zap,
+  Keyboard,
 } from "lucide-react";
 import { searchGlobal } from "../lib/api";
 
@@ -16,9 +19,15 @@ interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (tabId: string) => void;
+  onOpenShortcuts?: () => void;
 }
 
-export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPaletteProps) {
+export function CommandPalette({
+  isOpen,
+  onClose,
+  onNavigate,
+  onOpenShortcuts,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +58,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timeout);
   }, [query]);
@@ -57,11 +66,24 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
   if (!isOpen) return null;
 
   const quickNav = [
-    { id: "dashboard", label: "Overview & ROI", icon: LayoutDashboard, tag: "Dashboard" },
-    { id: "mandates", label: "Failed Mandates Log", icon: FileX2, tag: "Feed" },
-    { id: "approvals", label: "AI Approval Queue", icon: CheckSquare, tag: "Actions" },
-    { id: "audit", label: "Cryptographic Audit Trail", icon: List, tag: "Compliance" },
+    { id: "dashboard", label: "Overview & ROI Dashboard", icon: LayoutDashboard, tag: "1" },
+    { id: "mandates", label: "Failed Mandates & Retries Log", icon: FileX2, tag: "2" },
+    { id: "approvals", label: "AI Approval Queue & Dunning", icon: CheckSquare, tag: "3" },
+    { id: "audit", label: "Cryptographic Audit Trail", icon: List, tag: "4" },
   ];
+
+  const getItemIcon = (type: string) => {
+    if (type === "AUDIT_LOG") return <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />;
+    if (type === "RECOVERY_ACTION") return <Zap className="w-4 h-4 text-amber-400 shrink-0" />;
+    return <CreditCard className="w-4 h-4 text-[#3395FF] shrink-0" />;
+  };
+
+  const getItemBadge = (item: any) => {
+    if (item.type === "AUDIT_LOG") return "Audit";
+    if (item.subtitle && item.subtitle.includes("@")) return "Customer";
+    if (item.title && item.title.startsWith("sub_")) return "Subscription";
+    return "Payment";
+  };
 
   return (
     <AnimatePresence>
@@ -72,7 +94,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm"
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-md"
         />
 
         {/* Modal Window */}
@@ -90,7 +112,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search payments, audit logs, or jump to view... (ESC to exit)"
+              placeholder="Search payments, emails, subscriptions, or jump to view... (ESC to exit)"
               className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none"
             />
             {query && (
@@ -109,7 +131,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
             {!query && (
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-3 block mb-2">
-                  Navigation Shortcuts
+                  Navigation Views
                 </span>
                 <div className="space-y-1">
                   {quickNav.map((item) => (
@@ -125,9 +147,9 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
                         <item.icon className="w-4 h-4 text-slate-400 group-hover:text-blue-400" />
                         <span>{item.label}</span>
                       </div>
-                      <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                      <kbd className="text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                         {item.tag}
-                      </span>
+                      </kbd>
                     </button>
                   ))}
                 </div>
@@ -137,9 +159,12 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
             {/* Search Results */}
             {query && (
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-3 block mb-2">
-                  Search Results {loading ? "(Searching...)" : `(${results.length})`}
-                </span>
+                <div className="flex items-center justify-between px-3 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Deep Search Results {loading ? "(Searching...)" : `(${results.length})`}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">Payment ID · Email · Subscriptions</span>
+                </div>
 
                 {results.length === 0 && !loading && (
                   <div className="text-center py-8 text-slate-500 text-sm">
@@ -156,16 +181,25 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
                       else onNavigate("audit");
                       onClose();
                     }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left"
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left group mb-1.5"
                   >
                     <div className="flex items-center gap-3 truncate">
-                      <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
+                      {getItemIcon(item.type)}
                       <div className="truncate">
-                        <p className="text-xs font-bold text-slate-200 truncate">{item.title || item.razorpayPaymentId || item.id}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{item.subtitle || item.eventType || item.action}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-slate-200 group-hover:text-white truncate">
+                            {item.title || item.razorpayPaymentId || item.id}
+                          </p>
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-700/60 text-slate-300 border border-slate-600/50">
+                            {getItemBadge(item)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 group-hover:text-slate-300 truncate mt-0.5">
+                          {item.subtitle || item.eventType || item.action}
+                        </p>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-[#3395FF] group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
                   </button>
                 ))}
               </div>
@@ -173,13 +207,18 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
           </div>
 
           {/* Footer bar */}
-          <div className="px-4 py-2.5 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between font-mono">
-            <span>
-              Tip: Press{" "}
-              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
-                {typeof window !== "undefined" && (/Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac/i.test(navigator.userAgent || "")) ? "⌘" : "Ctrl"}
-              </kbd>{" "}
-              + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">K</kbd> anywhere
+          <div className="px-4 py-2.5 bg-slate-950/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
+            <span className="flex items-center gap-1.5">
+              <span>Shortcuts:</span>
+              <button
+                onClick={() => {
+                  onClose();
+                  if (onOpenShortcuts) onOpenShortcuts();
+                }}
+                className="text-[#3395FF] hover:underline flex items-center gap-1 font-semibold"
+              >
+                <Keyboard className="w-3 h-3" /> Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-white font-bold">?</kbd>
+              </button>
             </span>
             <span>RecoverMandate AI</span>
           </div>

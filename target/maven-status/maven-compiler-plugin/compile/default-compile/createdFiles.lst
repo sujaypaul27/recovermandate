@@ -41,7 +41,6 @@ com\recovermandate\repository\DispatchLogRepository.class
 com\recovermandate\scheduler\RetryExecutionScheduler.class
 com\recovermandate\ai\GeminiClient.class
 com\recovermandate\dto\ErrorResponse.class
-com\recovermandate\service\DispatchService.class
 com\recovermandate\audit\package-info.class
 com\recovermandate\entity\RecoveryAction$RecoveryActionBuilder.class
 com\recovermandate\entity\RetrySchedule$RetryScheduleBuilder.class

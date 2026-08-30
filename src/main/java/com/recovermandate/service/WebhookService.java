@@ -325,11 +325,23 @@ public class WebhookService {
 
         // Extract Customer details
         String customerId = extractCustomerId(root, paymentEntity, subscriptionEntity);
-        String customerEmail = extractCustomerEmail(root, paymentEntity);
-        String customerName = extractCustomerName(root, paymentEntity);
+        String customerEmail = extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+        String customerName = extractCustomerName(root, paymentEntity, subscriptionEntity);
 
-        // Look up Customer by razorpayCustomerId, create if not found
-        Customer customer = customerRepository.findByRazorpayCustomerId(customerId).orElseGet(() -> {
+        // Look up Customer by razorpayCustomerId, create or update if not found/incomplete
+        Customer customer = customerRepository.findByRazorpayCustomerId(customerId).map(existing -> {
+            boolean changed = false;
+            if ((existing.getEmail() == null || existing.getEmail().isBlank()) && customerEmail != null && !customerEmail.isBlank()) {
+                existing.setEmail(customerEmail);
+                changed = true;
+            }
+            if ((existing.getName() == null || existing.getName().isBlank() || "Razorpay Customer".equals(existing.getName()))
+                    && customerName != null && !customerName.isBlank()) {
+                existing.setName(customerName);
+                changed = true;
+            }
+            return changed ? customerRepository.save(existing) : existing;
+        }).orElseGet(() -> {
             Customer c = Customer.builder()
                     .merchant(merchant)
                     .name(customerName)
@@ -385,6 +397,12 @@ public class WebhookService {
         if (!subscriptionEntity.isMissingNode() && subscriptionEntity.hasNonNull("customer_id")) {
             return subscriptionEntity.get("customer_id").asText();
         }
+        if (!subscriptionEntity.isMissingNode()) {
+            JsonNode subCust = subscriptionEntity.path("customer");
+            if (!subCust.isMissingNode() && subCust.hasNonNull("id")) {
+                return subCust.get("id").asText();
+            }
+        }
         JsonNode customerEntity = root.path("payload").path("customer").path("entity");
         if (!customerEntity.isMissingNode() && customerEntity.hasNonNull("id")) {
             return customerEntity.get("id").asText();
@@ -395,45 +413,66 @@ public class WebhookService {
         return "cust_placeholder";
     }
 
-    private String extractCustomerEmail(JsonNode root, JsonNode paymentEntity) {
+    private String extractCustomerEmail(JsonNode root, JsonNode paymentEntity, JsonNode subscriptionEntity) {
         if (!paymentEntity.isMissingNode() && paymentEntity.hasNonNull("email")) {
-            return paymentEntity.get("email").asText();
+            String email = paymentEntity.get("email").asText().trim();
+            if (!email.isBlank()) return email;
+        }
+        if (!subscriptionEntity.isMissingNode()) {
+            JsonNode subCust = subscriptionEntity.path("customer");
+            if (!subCust.isMissingNode() && subCust.hasNonNull("email")) {
+                String email = subCust.get("email").asText().trim();
+                if (!email.isBlank()) return email;
+            }
         }
         JsonNode customerEntity = root.path("payload").path("customer").path("entity");
         if (!customerEntity.isMissingNode() && customerEntity.hasNonNull("email")) {
-            return customerEntity.get("email").asText();
+            String email = customerEntity.get("email").asText().trim();
+            if (!email.isBlank()) return email;
         }
         if (root.hasNonNull("email")) {
-            return root.get("email").asText();
+            String email = root.get("email").asText().trim();
+            if (!email.isBlank()) return email;
         }
-        return "customer@example.com";
+        return "demo.customer+" + UUID.randomUUID().toString().substring(0, 6) + "@example.com";
     }
 
-    private String extractCustomerName(JsonNode root, JsonNode paymentEntity) {
+    private String extractCustomerName(JsonNode root, JsonNode paymentEntity, JsonNode subscriptionEntity) {
         if (!paymentEntity.isMissingNode()) {
-            if (paymentEntity.hasNonNull("name")) {
-                return paymentEntity.get("name").asText();
+            if (paymentEntity.hasNonNull("name") && !paymentEntity.get("name").asText().isBlank()) {
+                return paymentEntity.get("name").asText().trim();
             }
-            if (paymentEntity.hasNonNull("customer_name")) {
-                return paymentEntity.get("customer_name").asText();
+            if (paymentEntity.hasNonNull("customer_name") && !paymentEntity.get("customer_name").asText().isBlank()) {
+                return paymentEntity.get("customer_name").asText().trim();
+            }
+        }
+        if (!subscriptionEntity.isMissingNode()) {
+            JsonNode subCust = subscriptionEntity.path("customer");
+            if (!subCust.isMissingNode()) {
+                if (subCust.hasNonNull("name") && !subCust.get("name").asText().isBlank()) {
+                    return subCust.get("name").asText().trim();
+                }
+                if (subCust.hasNonNull("customer_name") && !subCust.get("customer_name").asText().isBlank()) {
+                    return subCust.get("customer_name").asText().trim();
+                }
             }
         }
         JsonNode customerEntity = root.path("payload").path("customer").path("entity");
         if (!customerEntity.isMissingNode()) {
-            if (customerEntity.hasNonNull("name")) {
-                return customerEntity.get("name").asText();
+            if (customerEntity.hasNonNull("name") && !customerEntity.get("name").asText().isBlank()) {
+                return customerEntity.get("name").asText().trim();
             }
-            if (customerEntity.hasNonNull("customer_name")) {
-                return customerEntity.get("customer_name").asText();
+            if (customerEntity.hasNonNull("customer_name") && !customerEntity.get("customer_name").asText().isBlank()) {
+                return customerEntity.get("customer_name").asText().trim();
             }
         }
-        if (root.hasNonNull("name")) {
-            return root.get("name").asText();
+        if (root.hasNonNull("name") && !root.get("name").asText().isBlank()) {
+            return root.get("name").asText().trim();
         }
-        if (root.hasNonNull("customer_name")) {
-            return root.get("customer_name").asText();
+        if (root.hasNonNull("customer_name") && !root.get("customer_name").asText().isBlank()) {
+            return root.get("customer_name").asText().trim();
         }
-        return "Razorpay Customer";
+        return "Valued Customer";
     }
 
     private void handlePaymentLinkPaid(JsonNode root, PaymentEvent savedEvent) {

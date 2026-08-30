@@ -33,7 +33,9 @@ public class AuditQueryService {
                 .action(log.getAction())
                 .actor(log.getActor())
                 .reasoning(log.getReasoning())
+                .details(log.getReasoning())
                 .createdAt(log.getCreatedAt())
+                .timestamp(log.getCreatedAt())
                 .build();
     }
 }

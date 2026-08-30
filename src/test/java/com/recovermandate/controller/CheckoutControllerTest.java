@@ -120,4 +120,31 @@ class CheckoutControllerTest {
         verify(auditService).log(eq("PAYMENT_LINK"), eq(5L), eq("PAYMENT_LINK_PAID"), eq("CUSTOMER"), anyString());
         verify(sseService).broadcast(eq("payment.recovered"), anyMap());
     }
+
+    @Test
+    @DisplayName("GET /api/checkout/{linkId} with numeric sequential ID should return 404 (SEC-01)")
+    void getCheckoutDetails_numericId_returnsNotFound() throws Exception {
+        when(paymentLinkRepository.findByRazorpayLinkId("1")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/checkout/1"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /api/checkout/{linkId} with pay_rec prefix should return 404 (SEC-01)")
+    void getCheckoutDetails_payRecPrefix_returnsNotFound() throws Exception {
+        when(paymentLinkRepository.findByRazorpayLinkId("pay_rec_10")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/checkout/pay_rec_10"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /api/checkout/{linkId}/pay with non-existent link should return 404")
+    void simulatePayment_notFound_returnsNotFound() throws Exception {
+        when(paymentLinkRepository.findByRazorpayLinkId("plink_unknown")).thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/api/checkout/plink_unknown/pay"))
+                .andExpect(status().isNotFound());
+    }
 }

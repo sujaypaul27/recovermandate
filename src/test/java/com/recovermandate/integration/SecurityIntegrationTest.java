@@ -53,6 +53,14 @@ public class SecurityIntegrationTest {
     }
 
     @Test
+    void whenCheckoutEndpoint_withoutApiKey_thenPermitAllAuth() throws Exception {
+        // Unauthenticated customer access to checkout should NOT return 401 Unauthorized (SEC-03)
+        // Returns 404 since plink_nonexistent does not exist, confirming auth was bypassed
+        mockMvc.perform(get("/api/checkout/plink_nonexistent"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void rateLimiterTripsAfter50Requests() throws Exception {
         // MockMvc uses 127.0.0.1 as default remote address.
         // The bucket allows 50 requests per minute for this IP.

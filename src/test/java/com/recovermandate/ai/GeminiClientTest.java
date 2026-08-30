@@ -33,7 +33,7 @@ class GeminiClientTest {
     @Test
     @DisplayName("Should invoke heuristic fallback when API key is missing and mark source as HEURISTIC")
     void generateDraft_missingApiKey_usesFallback() {
-        when(heuristicFallbackEngine.generateTemplate(eq("insufficient_funds"), eq(49900L), eq("INR")))
+        when(heuristicFallbackEngine.generateTemplate(eq("insufficient_funds"), eq(49900L), eq("INR"), anyString()))
                 .thenReturn("Dear Customer,\n\nFallback draft");
 
         DraftResult draft = geminiClient.generateDraft("John Doe", 49900L, "INR", "insufficient_funds", 2);
@@ -41,13 +41,13 @@ class GeminiClientTest {
         assertNotNull(draft);
         assertEquals("Dear Customer,\n\nFallback draft", draft.message());
         assertEquals("HEURISTIC", draft.source());
-        verify(heuristicFallbackEngine).generateTemplate("insufficient_funds", 49900L, "INR");
+        verify(heuristicFallbackEngine).generateTemplate("insufficient_funds", 49900L, "INR", "RecoverMandate");
     }
 
     @Test
     @DisplayName("Should invoke generateDraftFallback directly on error")
     void generateDraftFallback_setsDraftSourceToHeuristic() {
-        when(heuristicFallbackEngine.generateTemplate(eq("technical_decline"), eq(10000L), eq("INR")))
+        when(heuristicFallbackEngine.generateTemplate(eq("technical_decline"), eq(10000L), eq("INR"), anyString()))
                 .thenReturn("Dear Customer,\n\nTechnical fallback");
 
         DraftResult draft = geminiClient.generateDraftFallback(

@@ -183,6 +183,63 @@ RecoverMandate is an enterprise-grade payment failure observability, AI-driven d
 
 ---
 
+## 5.2 Recurring Mandate Re-Authorization ("Mandate Swap") Strategy
+
+### Problem: Permanent Mandate Decline vs Transient Invoicing
+When a recurring subscription mandate fails permanently—such as an **expired debit/credit card**, a **revoked e-NACH mandate**, or an **unlinked bank account** (`expired_mandate` / `customer_revoked_mandate`)—standard payment links only settle the *current* unpaid invoice. Without swapping the underlying mandate token, the *next* billing cycle will inevitably fail again, resulting in repeated merchant dunning costs and eventual involuntary customer churn.
+
+### The "Mandate Swap" Solution Architecture
+
+```
+                                  ┌────────────────────────┐
+                                  │ Permanent Mandate Fail │
+                                  │ (Card Expired/Revoked) │
+                                  └───────────┬────────────┘
+                                              │
+                                              ▼
+                             ┌──────────────────────────────────┐
+                             │ RecoverMandate AI Classifies:    │
+                             │ Category = expired_mandate       │
+                             │ AutoRecoverable = FALSE          │
+                             └────────────────┬─────────────────┘
+                                              │
+                                              ▼
+                             ┌──────────────────────────────────┐
+                             │ Dispatches "Mandate Swap" Flow:  │
+                             │ 1. Settles Overdue Invoice (₹X)  │
+                             │ 2. Registers New UPI AutoPay     │
+                             └────────────────┬─────────────────┘
+                                              │
+                                              ▼
+                             ┌──────────────────────────────────┐
+                             │ Customer Authorizes ₹1 / ₹0 UPI  │
+                             │ Mandate via Razorpay Checkout    │
+                             └────────────────┬─────────────────┘
+                                              │
+                     ┌────────────────────────┴────────────────────────┐
+                     ▼                                                 ▼
+        ┌─────────────────────────┐                       ┌─────────────────────────┐
+        │  Invoice Settled (PAID) │                       │  New token_id Stored &  │
+        │  RecoveryAction RECOVERED│                       │  Subscription Updated   │
+        └─────────────────────────┘                       └─────────────────────────┘
+```
+
+1. **Combined Authorization + Settlement Link**:
+   * Razorpay Checkout supports creating a customer session that simultaneously charges the overdue amount AND issues a new recurring token (e.g. UPI AutoPay, e-Mandate, Tokenized Card).
+   * API Invocation: `POST /v1/subscriptions/{id}/swap_token` or `POST /v1/payment_links` with `recurring: 1`.
+
+2. **Zero-Friction UPI AutoPay Migration**:
+   * Card mandates subject to RBI recurring 2FA restrictions are actively migrated to UPI AutoPay (limit up to ₹15,000 without per-transaction OTP).
+   * Customers approve the mandate modification directly in their UPI app (Google Pay, PhonePe, Paytm, CRED).
+
+3. **Webhook Lifecycle Synchronization**:
+   * Upon receiving `subscription.authenticated` or `token.confirmed` with the new token ID:
+     * RecoverMandate updates the `Subscription` entity with the new `razorpayTokenId`.
+     * Logs cryptographic audit event `MANDATE_TOKEN_SWAPPED` signed with HMAC-SHA256.
+     * Future recurring billing cycles execute against the new, active mandate token with zero customer interruption.
+
+---
+
 ## 6. Completed Legacy Phases
 
 All 14 original development phases are complete (Core Domain → Award-Winning UX). See legacy PROJECT_CONTEXT.md for full history.

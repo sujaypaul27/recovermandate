@@ -75,12 +75,24 @@ public class RecoveryActionService {
             daysSinceFailure = (int) ChronoUnit.DAYS.between(event.getReceivedAt(), Instant.now());
         }
 
+        String merchantName = "RecoverMandate";
+        if (merchantSettingsService != null) {
+            try {
+                var settings = merchantSettingsService.getSettings();
+                if (settings != null && settings.getBusinessDisplayName() != null && !settings.getBusinessDisplayName().isBlank()) {
+                    merchantName = settings.getBusinessDisplayName();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
         DraftResult draftResult = geminiClient.generateDraft(
                 customerName,
                 event != null ? event.getAmount() : null,
                 currency,
                 classification.getCategory(),
-                daysSinceFailure
+                daysSinceFailure,
+                merchantName
         );
 
         if (draftResult == null || draftResult.message() == null) {
@@ -236,6 +248,10 @@ public class RecoveryActionService {
             throw new IllegalStateException("Action cannot be approved because it is not in DRAFTED state. Current state: " + action.getStatus());
         }
 
+        if (action.getVersion() == null) {
+            action.setVersion(0L);
+        }
+
         action.setStatus("APPROVED");
         action.setApprovedBy(approvedBy);
         action.setApprovedAt(Instant.now());
@@ -267,6 +283,10 @@ public class RecoveryActionService {
 
         RecoveryAction action = recoveryActionRepository.findById(actionId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("RecoveryAction not found with id: " + actionId));
+
+        if (action.getVersion() == null) {
+            action.setVersion(0L);
+        }
 
         if (tone != null && !tone.isBlank()) {
             action.setTone(tone.toLowerCase(java.util.Locale.ROOT));
@@ -311,6 +331,10 @@ public class RecoveryActionService {
             throw new IllegalStateException("Action cannot be rejected because it is not in DRAFTED state. Current state: " + action.getStatus());
         }
 
+        if (action.getVersion() == null) {
+            action.setVersion(0L);
+        }
+
         action.setStatus("REJECTED");
         recoveryActionRepository.save(action);
 
@@ -346,6 +370,9 @@ public class RecoveryActionService {
         String customerEmail = (pe != null && pe.getSubscription() != null && pe.getSubscription().getCustomer() != null)
                 ? pe.getSubscription().getCustomer().getEmail()
                 : null;
+        String customerName = (pe != null && pe.getSubscription() != null && pe.getSubscription().getCustomer() != null)
+                ? pe.getSubscription().getCustomer().getName()
+                : null;
 
         String matchedRule = FailureClassificationService.describeMatchedRule(rawErrorCode, category != null ? category : "unknown");
 
@@ -369,6 +396,7 @@ public class RecoveryActionService {
                 .razorpayPaymentId(paymentId)
                 .amount(amount)
                 .customerEmail(customerEmail)
+                .customerName(customerName)
                 .build();
     }
 }

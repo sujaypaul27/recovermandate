@@ -39,4 +39,15 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.geminiApi.model").value("gemini-3.5-flash-lite"))
                 .andExpect(jsonPath("$.database.status").exists());
     }
+
+    @Test
+    @DisplayName("GET /api/health/banks should return list of monitored banks")
+    void getBankingRailsHealth_returnsBankList() throws Exception {
+        mockMvc.perform(get("/api/health/banks")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$[0].bankCode").value("HDFC"))
+                .andExpect(jsonPath("$[1].bankCode").value("SBI"));
+    }
 }

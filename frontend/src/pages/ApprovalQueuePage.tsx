@@ -22,6 +22,13 @@ import {
   ChevronUp,
   Code2,
   Zap,
+  Mail,
+  MessageSquare,
+  Smartphone,
+  CheckCheck,
+  Edit3,
+  RotateCcw,
+  PenSquare,
 } from "lucide-react";
 import {
   fetchRecoveryActions,
@@ -34,6 +41,7 @@ import {
 import { RazorpayMark, RazorpayBadge } from "../components/RazorpayLogo";
 import { EmptyState } from "../components/EmptyState";
 import { formatINR } from "../lib/formatters";
+import { getStatusConfig } from "../lib/statusFormatters";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = {
@@ -119,7 +127,12 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
     load();
   }, [refreshTrigger]);
 
-  const pendingActions = data?.content || [];
+  const pendingActions = [...(data?.content || [])].sort((a, b) => {
+    const timeA = new Date(a.createdAt || 0).getTime();
+    const timeB = new Date(b.createdAt || 0).getTime();
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.id || 0) - (a.id || 0);
+  });
   const safeActions = pendingActions.filter((a) => !a.amount || a.amount <= 250000);
   const totalSafeValuePaise = safeActions.reduce(
     (acc, a) => acc + (a.amount != null ? a.amount : 49900),
@@ -329,44 +342,69 @@ function ApprovalCard({
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [selectedTone, setSelectedTone] = useState<"gentle" | "balanced" | "urgent">("balanced");
+  const [previewChannel, setPreviewChannel] = useState<"email" | "whatsapp" | "sms">("email");
   const [copiedLink, setCopiedLink] = useState(false);
   const [showExplainability, setShowExplainability] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const isHeuristic = action.draftSource === "HEURISTIC";
+  const isDraftMode = action.status === "DRAFTED";
   const paymentLink =
-    action.paymentLinkUrl || `https://rzp.io/simulated/pay_rec_${action.id || 101}`;
+    action.paymentLinkUrl || (action.id ? `https://rzp.io/l/plink_preview_act_${action.id}` : "https://rzp.io/l/plink_preview");
 
   // Extract amount from draft or default to standard ₹499.00
   const amountMatch = action.aiDraftMessage?.match(/₹[\d,]+(\.\d{2})?/);
   const formattedAmount = amountMatch ? amountMatch[0] : "₹499.00";
 
-  // Dynamic Draft Rewriting based on selected tone
-  const getComputedDraft = () => {
-    if (selectedTone === "gentle") {
-      return `Hi Valued Customer,\n\nWe noticed a temporary issue processing your mandate for ${formattedAmount}. No worries — your subscription remains active.\n\nTap here to easily update your payment details or retry:\n${paymentLink}\n\nThank you for choosing us,\nCustomer Success Team`;
-    } else if (selectedTone === "urgent") {
-      return `⚠️ ACTION REQUIRED: Mandate payment of ${formattedAmount} failed.\n\nYour subscription is in grace period and will automatically PAUSE in 48 hours unless resolved.\n\nPlease immediately complete payment via Razorpay secure checkout:\n${paymentLink}\n\nImmediate settlement required to prevent service cancellation.`;
-    } else {
-      // Balanced (Standard Professional)
-      if (action.aiDraftMessage && action.aiDraftMessage.trim() && !isHeuristic) {
-        return action.aiDraftMessage.includes("http")
-          ? action.aiDraftMessage
-          : `${action.aiDraftMessage}\n\nSecurely retry or update payment method:\n${paymentLink}`;
+  // Dynamic Draft Generation per channel and tone
+  const getBaseDraft = (channel: "email" | "whatsapp" | "sms", tone: "gentle" | "balanced" | "urgent") => {
+    if (channel === "email") {
+      if (tone === "gentle") {
+        return `Hi ${action.customerName || "Valued Customer"},\n\nWe noticed a temporary issue processing your mandate for ${formattedAmount}. No worries — your subscription remains active.\n\nTap here to easily update your payment details or retry:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings.\n\nThank you for choosing us,\nCustomer Success Team`;
+      } else if (tone === "urgent") {
+        return `⚠️ ACTION REQUIRED: Mandate payment of ${formattedAmount} failed.\n\nYour subscription is in grace period and will automatically PAUSE in 48 hours unless resolved.\n\nPlease immediately complete payment via Razorpay secure checkout:\n${paymentLink}\n\nIf you no longer wish to maintain your subscription, you can manage or cancel your plan in account settings before the grace period ends.\n\nImmediate settlement required to prevent service cancellation.`;
+      } else {
+        if (action.aiDraftMessage && action.aiDraftMessage.trim() && !isHeuristic) {
+          return action.aiDraftMessage.includes("http")
+            ? action.aiDraftMessage
+            : `${action.aiDraftMessage}\n\nSecurely retry or update payment method:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings or by contacting support.`;
+        }
+        return `Hello ${action.customerName || "Valued Customer"},\n\nYour mandate payment of ${formattedAmount} failed due to a bank processing issue. Securely retry or update your payment method:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings or by contacting support.\n\nBest regards,\nBilling & Subscriptions`;
       }
-      return `Hello Valued Customer,\n\nYour mandate payment of ${formattedAmount} failed due to a bank processing issue. Securely retry or update your payment method:\n${paymentLink}\n\nBest regards,\nBilling & Subscriptions`;
+    } else if (channel === "whatsapp") {
+      if (tone === "gentle") {
+        return `Hi ${action.customerName || "there"} 👋 We noticed a small glitch processing your subscription renewal of ${formattedAmount}. Don't worry, your access is active! Tap below to update payment:\n${paymentLink}\n\n(If you wish to cancel instead, you can do so anytime in your account settings.)`;
+      } else if (tone === "urgent") {
+        return `🚨 URGENT: Your mandate payment of ${formattedAmount} failed. Service will be paused within 48 hours. Please complete immediate recovery payment here:\n${paymentLink}\n\nTo cancel your subscription instead, visit account settings before expiry.`;
+      } else {
+        return `Hello ${action.customerName || "Customer"}, your recurring mandate payment of ${formattedAmount} could not be processed. Please use this secure Razorpay link to restore active status:\n${paymentLink}\n\nTo cancel or update your plan, visit your account portal anytime.`;
+      }
+    } else {
+      // SMS / DLT
+      if (tone === "gentle") {
+        return `Hi ${action.customerName || "Customer"}, your mandate payment of ${formattedAmount} had a transient bank delay. Update details here: ${paymentLink} (Cancel anytime in portal) - RM`;
+      } else if (tone === "urgent") {
+        return `ALERT: Mandate payment of ${formattedAmount} failed. Grace period expires in 48h. Pay: ${paymentLink} or cancel in settings to stop charges - RM`;
+      } else {
+        return `Your subscription mandate payment of ${formattedAmount} failed. Securely retry: ${paymentLink} (Cancel anytime in account settings) - RM`;
+      }
     }
   };
 
-  const activeDraftText = getComputedDraft();
+  const activeDraftText = customDrafts[previewChannel] ?? getBaseDraft(previewChannel, selectedTone);
+  const isCustomEdited = customDrafts[previewChannel] !== undefined;
   const currentStrategy = TONE_STRATEGIES[selectedTone];
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(paymentLink);
     setCopiedLink(true);
     toast({
-      title: "Razorpay Link Copied",
-      description: `Copied ${paymentLink} to clipboard.`,
+      title: isDraftMode ? "Preview Link Copied" : "Razorpay Link Copied",
+      description: isDraftMode
+        ? `Copied preview URL. Live link will be dispatched to customer upon approval.`
+        : `Copied ${paymentLink} to clipboard.`,
     });
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -400,13 +438,21 @@ function ApprovalCard({
                 <div className="w-7 h-7 rounded-lg bg-[#02042B] border border-[#3395FF]/40 flex items-center justify-center">
                   <RazorpayMark className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Strategy #{action.id}
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Strategy #{action.id}</span>
+                  <span className="text-sm font-semibold text-[#93c5fd] font-sans">
+                    · {action.customerName || (action.customerEmail ? action.customerEmail.split("@")[0] : "Customer")}
+                  </span>
                 </h3>
               </div>
-              <Badge className="bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-wider">
-                Needs Review
-              </Badge>
+              {(() => {
+                const statusCfg = getStatusConfig(action.status);
+                return (
+                  <Badge className={`${statusCfg.badgeClass} text-xs font-bold uppercase tracking-wider`} title={statusCfg.description}>
+                    {statusCfg.label}
+                  </Badge>
+                );
+              })()}
               {isHeuristic ? (
                 <Badge className="bg-purple-500/15 text-purple-300 border border-purple-500/30 text-xs font-semibold flex items-center gap-1">
                   <Cpu className="w-3 h-3" /> Heuristic Engine
@@ -417,10 +463,20 @@ function ApprovalCard({
                 </Badge>
               )}
             </div>
-            <p className="text-xs font-mono text-slate-400 mt-1.5 flex items-center gap-2">
-              <span>Drafted: {new Date(action.createdAt).toLocaleString()}</span>
+            <p className="text-xs font-mono text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
+              <span>Customer: <strong className="text-slate-200">{action.customerName || "Customer"}</strong></span>
               <span>•</span>
-              <span className="text-[#3395FF] font-semibold">Razorpay Mandate Intercept</span>
+              <span className="flex items-center gap-1.5">
+                <span>To:</span>
+                <strong className="text-cyan-300 font-mono">{action.customerEmail || "subscriber@example.com"}</strong>
+                {action.customerEmail && !action.customerEmail.includes("@example.com") && (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
+                    ⚡ Live Target
+                  </span>
+                )}
+              </span>
+              <span>•</span>
+              <span>Drafted: {new Date(action.createdAt).toLocaleTimeString()}</span>
             </p>
           </div>
 
@@ -581,24 +637,281 @@ function ApprovalCard({
 
         {/* Split Interface - "The Code Editor" feel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 border border-[#3395FF]/30 rounded-xl overflow-hidden shadow-lg">
-          {/* Left: Dynamic AI Draft (7 cols) */}
+          {/* Left: Dynamic AI Multi-Channel Draft Previews (7 cols) */}
           <div className="lg:col-span-7 bg-[#02042B] p-5 relative flex flex-col justify-between">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#3395FF] via-cyan-400 to-indigo-500" />
+            
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-[#93c5fd] flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-[#3395FF]" />
-                  {isHeuristic ? "Heuristic Strategy Draft" : "Gemini 3.5 Flash Draft"}{" "}
-                  <span className="text-slate-400 font-normal">({selectedTone})</span>
-                </h4>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  Live Preview
-                </span>
+              {/* Channel Selector Tabs & Inline Edit Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-1.5 bg-[#061530] p-1 rounded-xl border border-[#3395FF]/30 text-xs shadow-inner flex-wrap">
+                  <button
+                    onClick={() => setPreviewChannel("email")}
+                    className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                      previewChannel === "email"
+                        ? "bg-[#3395FF] text-white shadow-md shadow-[#3395FF]/30"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email</span>
+                    {customDrafts["email"] && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Custom edits active" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setPreviewChannel("whatsapp")}
+                    className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                      previewChannel === "whatsapp"
+                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>WhatsApp Business</span>
+                    {customDrafts["whatsapp"] && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Custom edits active" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setPreviewChannel("sms")}
+                    className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                      previewChannel === "sms"
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>SMS / DLT</span>
+                    {customDrafts["sms"] && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Custom edits active" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  {isCustomEdited && (
+                    <span className="text-[10px] font-mono text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30 font-bold flex items-center gap-1">
+                      <PenSquare className="w-3 h-3 text-amber-400" /> Manual Edit Applied
+                    </span>
+                  )}
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCustomDrafts((prev) => {
+                            const copy = { ...prev };
+                            delete copy[previewChannel];
+                            return copy;
+                          });
+                          setIsEditing(false);
+                        }}
+                        className="h-7 px-2 text-[11px] border-slate-700 bg-slate-800/80 text-slate-300 hover:text-white"
+                        title="Discard edits and restore original AI draft"
+                      >
+                        <RotateCcw className="w-3 h-3 mr-1 text-slate-400" /> Reset AI
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setIsEditing(false)}
+                        className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm"
+                      >
+                        <Check className="w-3 h-3 mr-1" /> Done
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsEditing(true)}
+                      className="h-7 px-2.5 text-[11px] border-[#3395FF]/40 bg-[#061530] text-[#93c5fd] hover:text-white hover:bg-[#3395FF]/20 font-semibold gap-1"
+                    >
+                      <Edit3 className="w-3 h-3 text-[#3395FF]" />
+                      <span>{isCustomEdited ? "Edit Message" : "✏️ Edit Draft"}</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              <div className="text-sm leading-relaxed text-slate-200 font-mono whitespace-pre-wrap pl-3 border-l-2 border-[#3395FF]/40 min-h-[140px] bg-[#061530]/40 p-3 rounded-r-lg">
-                <TypewriterText text={activeDraftText} />
-              </div>
+              {/* EMAIL CHANNEL VIEW */}
+              {previewChannel === "email" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl bg-[#08182D] border border-slate-700/60 p-4 space-y-3 shadow-inner"
+                >
+                  <div className="border-b border-slate-700/60 pb-2.5 text-xs text-slate-400 space-y-1 font-sans">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-300 w-14">From:</span>
+                      <span className="text-slate-300 font-mono text-[11px]">billing@recovermandate.io (Verified SPF/DKIM)</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-300 w-14">To:</span>
+                      <span className="text-[#93c5fd] font-mono text-[11px] font-semibold">
+                        {action.customerName ? `${action.customerName} <${action.customerEmail || "customer@example.com"}>` : (action.customerEmail || "subscriber@example.com")}
+                      </span>
+                      {action.customerEmail && !action.customerEmail.includes("@example.com") && (
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-sans font-bold uppercase tracking-wider">
+                          ⚡ Live Recipient
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-300 w-14">Subject:</span>
+                      <span className="text-white font-semibold">Action Required: Your Subscription Mandate Payment Failed</span>
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={activeDraftText}
+                        onChange={(e) =>
+                          setCustomDrafts((prev) => ({ ...prev, [previewChannel]: e.target.value }))
+                        }
+                        rows={6}
+                        placeholder="Write custom email dunning message..."
+                        className="w-full text-xs font-mono leading-relaxed text-slate-100 bg-[#02042B] p-3 rounded-lg border border-[#3395FF]/50 focus:border-[#3395FF] focus:ring-1 focus:ring-[#3395FF] outline-none resize-y"
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                        <span>💡 Tip: The payment link URL will be embedded in the checkout button below.</span>
+                        <span>{activeDraftText.length} chars</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm leading-relaxed text-slate-200 font-mono whitespace-pre-wrap min-h-[110px] bg-[#02042B]/80 p-3 rounded-lg border border-slate-800">
+                      {isCustomEdited ? <span>{activeDraftText}</span> : <TypewriterText text={activeDraftText} />}
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <a
+                      href={paymentLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#3395FF] hover:bg-[#2582eb] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-[#3395FF]/20 transition-colors"
+                    >
+                      <RazorpayMark className="w-4 h-4 text-white" />
+                      <span>Pay Overdue {formattedAmount} via Razorpay Secure Checkout</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* WHATSAPP BUSINESS VIEW */}
+              {previewChannel === "whatsapp" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl bg-[#0b141a] border border-emerald-500/30 overflow-hidden shadow-inner font-sans"
+                >
+                  {/* WhatsApp Header */}
+                  <div className="bg-[#1f2c34] px-4 py-2.5 border-b border-slate-700/60 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                      RM
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white">RecoverMandate Billing</span>
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-medium">
+                        To: {action.customerName || "Customer"} ({action.customerEmail || "Verified Subscriber"})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Chat Body */}
+                  <div className="p-4 space-y-3 bg-[radial-gradient(#1f2c34_1px,transparent_1px)] [background-size:16px_16px] bg-[#0b141a]">
+                    <div className="max-w-[90%] bg-[#005c4b] text-white p-3.5 rounded-2xl rounded-tl-sm shadow-md space-y-2.5">
+                      {isEditing ? (
+                        <textarea
+                          value={activeDraftText}
+                          onChange={(e) =>
+                            setCustomDrafts((prev) => ({ ...prev, [previewChannel]: e.target.value }))
+                          }
+                          rows={4}
+                          placeholder="Type WhatsApp recovery message..."
+                          className="w-full text-xs font-sans leading-relaxed text-white bg-[#004a3c] p-2.5 rounded-lg border border-emerald-400/40 focus:border-emerald-300 focus:ring-1 focus:ring-emerald-300 outline-none resize-y"
+                        />
+                      ) : (
+                        <p className="text-xs leading-relaxed font-sans whitespace-pre-wrap">
+                          {activeDraftText}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-end gap-1 text-[10px] text-emerald-200 font-mono">
+                        <span>{activeDraftText.length} chars</span>
+                        <span>· Just now</span>
+                        <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />
+                      </div>
+                    </div>
+
+                    {/* WhatsApp Quick Reply Action Button */}
+                    <div className="max-w-[90%]">
+                      <a
+                        href={paymentLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full py-2.5 px-4 rounded-xl bg-[#1f2c34] hover:bg-[#2a3942] border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
+                      >
+                        <RazorpayMark className="w-4 h-4" />
+                        <span>Pay Overdue {formattedAmount}</span>
+                        <ExternalLink className="w-3 h-3 text-emerald-400" />
+                      </a>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* SMS / DLT VIEW */}
+              {previewChannel === "sms" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl bg-[#08182D] border border-indigo-500/30 p-4 space-y-3 shadow-inner font-sans"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-700/60 pb-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">Sender ID:</span>
+                      <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold border border-indigo-500/30">
+                        VM-RZPMND
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      TRAI DLT Template ID: 140716892019482
+                    </span>
+                  </div>
+
+                  <div className="bg-[#02042B] p-4 rounded-2xl rounded-bl-sm border border-slate-800 text-xs leading-relaxed text-slate-200 space-y-2 font-mono">
+                    {isEditing ? (
+                      <textarea
+                        value={activeDraftText}
+                        onChange={(e) =>
+                          setCustomDrafts((prev) => ({ ...prev, [previewChannel]: e.target.value }))
+                        }
+                        rows={3}
+                        placeholder="Type SMS text..."
+                        className="w-full text-xs font-mono leading-relaxed text-slate-100 bg-[#08182D] p-2.5 rounded-lg border border-indigo-500/50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none resize-y"
+                      />
+                    ) : (
+                      <p>{activeDraftText}</p>
+                    )}
+                    <p className="text-blue-400 underline font-semibold break-all">{paymentLink}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span className="flex items-center gap-1.5 text-indigo-300 font-medium">
+                      <ShieldCheck className="w-3.5 h-3.5" /> DLT Telemarketer Entity Verified
+                    </span>
+                    <span className="font-mono text-slate-400">
+                      {activeDraftText.length + paymentLink.length + 1}/160 chars · {activeDraftText.length + paymentLink.length + 1 <= 160 ? "Single SMS" : "Multi-part SMS"}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
             </div>
 
             {/* Embedded Razorpay Link Preview */}
@@ -610,9 +923,17 @@ function ApprovalCard({
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-white tracking-wide">Razorpay Hosted Link</span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        256-BIT SSL
+                      <span className="text-[11px] font-bold text-white tracking-wide">
+                        {isDraftMode ? "Razorpay Hosted Link (Draft Preview)" : "Razorpay Hosted Link"}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                          isDraftMode
+                            ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        }`}
+                      >
+                        {isDraftMode ? "PREVIEW · ACTIVATES ON APPROVAL" : "256-BIT SSL LIVE"}
                       </span>
                     </div>
                     <span className="text-xs font-mono text-[#93c5fd] truncate block">
@@ -634,7 +955,7 @@ function ApprovalCard({
                     target="_blank"
                     rel="noreferrer"
                     className="p-1.5 rounded-lg bg-[#02042B] hover:bg-[#3395FF]/20 border border-[#3395FF]/40 text-[#3395FF] hover:text-white transition-colors"
-                    title="Open test payment link in new tab"
+                    title="Open checkout link in new tab"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>

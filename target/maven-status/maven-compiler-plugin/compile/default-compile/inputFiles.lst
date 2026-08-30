@@ -6,6 +6,7 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\audit\Audi
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\audit\package-info.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\client\RazorpayApiClient.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\config\AsyncConfig.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\config\DatabaseMigrationRunner.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\config\MdcFilter.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\AuditLogController.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\controller\CheckoutController.java
@@ -54,6 +55,8 @@ C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\entity\Web
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\event\PaymentFailedEvent.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\event\WebhookEventListener.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\heuristic\RecoveryWindowCalculator.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\mail\EmailSendResult.java
+C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\mail\EmailService.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\RecoverMandateApplication.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\AuditLogRepository.java
 C:\Users\Paul\Desktop\recovermandate\src\main\java\com\recovermandate\repository\BankHealthSnapshotRepository.java

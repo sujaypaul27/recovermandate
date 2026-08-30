@@ -20,6 +20,13 @@ public class PaymentEventResponse {
     private Long amount;
     private Instant receivedAt;
     
+    // Customer & Subscription details
+    private String customerName;
+    private String customerEmail;
+    private String subscriptionId;
+    private String planName;
+    private String failureReasonCode;
+    
     // Classification fields
     private String classificationCategory;
     private Boolean autoRecoverable;
@@ -27,4 +34,9 @@ public class PaymentEventResponse {
 
     // Smart Retry Schedules
     private java.util.List<RetryScheduleDto> retrySchedules;
+
+    // Recovery Action & Payment Link details
+    private Long recoveryActionId;
+    private String paymentLinkId;
+    private String paymentLinkUrl;
 }

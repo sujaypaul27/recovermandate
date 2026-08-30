@@ -21,6 +21,7 @@ public class PaymentEventQueryService {
     private final PaymentEventRepository paymentEventRepository;
     private final FailureClassificationRepository failureClassificationRepository;
     private final RecoveryActionRepository recoveryActionRepository;
+    private final com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
     private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
 
     public Page<PaymentEventResponse> getPaymentEvents(String category, String status, Pageable pageable) {
@@ -29,6 +30,22 @@ public class PaymentEventQueryService {
     }
 
     private PaymentEventResponse mapToResponse(PaymentEvent event) {
+        String customerName = null;
+        String customerEmail = null;
+        String subscriptionId = null;
+        String planName = null;
+
+        if (event.getSubscription() != null) {
+            subscriptionId = event.getSubscription().getRazorpaySubscriptionId();
+            if (event.getSubscription().getCustomer() != null) {
+                customerName = event.getSubscription().getCustomer().getName();
+                customerEmail = event.getSubscription().getCustomer().getEmail();
+            }
+            if (event.getSubscription().getPlan() != null) {
+                planName = event.getSubscription().getPlan().getRazorpayPlanId();
+            }
+        }
+
         PaymentEventResponse response = PaymentEventResponse.builder()
                 .id(event.getId())
                 .traceId(event.getTraceId())
@@ -36,6 +53,11 @@ public class PaymentEventQueryService {
                 .eventType(event.getEventType())
                 .amount(event.getAmount())
                 .receivedAt(event.getReceivedAt())
+                .failureReasonCode(event.getFailureReasonCode())
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .subscriptionId(subscriptionId)
+                .planName(planName)
                 .build();
 
         Optional<FailureClassification> classificationOpt = failureClassificationRepository.findByPaymentEvent(event);
@@ -46,7 +68,17 @@ public class PaymentEventQueryService {
             
             Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassification(fc);
             if (actionOpt.isPresent()) {
-                response.setClassificationStatus(actionOpt.get().getStatus());
+                RecoveryAction action = actionOpt.get();
+                response.setClassificationStatus(action.getStatus());
+                response.setRecoveryActionId(action.getId());
+                response.setPaymentLinkUrl(action.getPaymentLinkUrl());
+
+                if (paymentLinkRepository != null) {
+                    paymentLinkRepository.findByRecoveryAction(action).ifPresent(pl -> {
+                        response.setPaymentLinkId(pl.getRazorpayLinkId());
+                        response.setPaymentLinkUrl(pl.getShortUrl());
+                    });
+                }
             } else if (fc.isAutoRecoverable()) {
                 response.setClassificationStatus("AUTO_RECOVERED");
             } else {

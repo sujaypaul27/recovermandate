@@ -15,6 +15,21 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: false
+  mail:
+    host: ${SPRING_MAIL_HOST:${MAIL_HOST:smtp.gmail.com}}
+    port: ${SPRING_MAIL_PORT:${MAIL_PORT:587}}
+    username: ${SPRING_MAIL_USERNAME:${MAIL_USERNAME:}}
+    password: ${SPRING_MAIL_PASSWORD:${MAIL_PASSWORD:}}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 server:
   port: ${PORT:8080}
 logging:
@@ -38,6 +53,10 @@ recovermandate:
     api-key: ${API_KEY:default-dev-key}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  mail:
+    enabled: ${MAIL_ENABLED:true}
+    from-email: ${MAIL_FROM:billing@recovermandate.io}
+    from-name: ${MAIL_FROM_NAME:RecoverMandate Billing}
 
 resilience4j:
   circuitbreaker:

@@ -121,13 +121,16 @@ public class DashboardService {
     public byte[] exportRecoveryLedgerCsv() {
         List<PaymentEvent> events = paymentEventRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 5000)).getContent();
         StringBuilder sb = new StringBuilder();
-        sb.append("Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash\r\n");
+        sb.append("Payment ID,Subscription ID,Customer Name,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash\r\n");
 
         for (PaymentEvent event : events) {
             String paymentId = event.getRazorpayPaymentId() != null ? event.getRazorpayPaymentId() : "pay_" + event.getId();
             String subscriptionId = (event.getSubscription() != null && event.getSubscription().getRazorpaySubscriptionId() != null)
                     ? event.getSubscription().getRazorpaySubscriptionId()
                     : "N/A";
+            String customerName = (event.getSubscription() != null && event.getSubscription().getCustomer() != null && event.getSubscription().getCustomer().getName() != null)
+                    ? event.getSubscription().getCustomer().getName()
+                    : "Customer";
             String customerEmail = (event.getSubscription() != null && event.getSubscription().getCustomer() != null && event.getSubscription().getCustomer().getEmail() != null)
                     ? event.getSubscription().getCustomer().getEmail()
                     : "customer@example.com";
@@ -174,6 +177,7 @@ public class DashboardService {
 
             sb.append(escapeCsv(paymentId)).append(",")
               .append(escapeCsv(subscriptionId)).append(",")
+              .append(escapeCsv(customerName)).append(",")
               .append(escapeCsv(customerEmail)).append(",")
               .append(escapeCsv(failureCategory)).append(",")
               .append(escapeCsv(failureTime)).append(",")

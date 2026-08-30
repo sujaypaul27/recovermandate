@@ -28,6 +28,10 @@ public class PaymentEventController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         
-        return paymentEventQueryService.getPaymentEvents(category, status, PageRequest.of(page, size));
+        return paymentEventQueryService.getPaymentEvents(
+                category,
+                status,
+                PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "receivedAt", "id"))
+        );
     }
 }

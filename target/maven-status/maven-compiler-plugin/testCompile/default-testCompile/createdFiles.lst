@@ -28,7 +28,6 @@ com\recovermandate\webhook\RazorpayWebhookControllerTest.class
 com\recovermandate\RecoverMandateApplicationTests.class
 com\recovermandate\ai\GeminiClientTest.class
 com\recovermandate\scheduler\RetryExecutionSchedulerTest.class
-com\recovermandate\service\DispatchServiceTest.class
 com\recovermandate\service\FailureClassificationServiceTest$IdempotencyTests.class
 com\recovermandate\audit\AuditServiceTest.class
 com\recovermandate\service\RecoveryActionServiceTest.class

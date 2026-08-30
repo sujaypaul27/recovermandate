@@ -34,7 +34,17 @@ public class DemoController {
     private final RecoveryActionService recoveryActionService;
     private final PaymentLinkRepository paymentLinkRepository;
     private final RecoveryActionRepository recoveryActionRepository;
+    private final com.recovermandate.repository.FailureClassificationRepository failureClassificationRepository;
+    private final com.recovermandate.repository.PaymentEventRepository paymentEventRepository;
+    private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+    private final com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
+    private final com.recovermandate.repository.AuditLogRepository auditLogRepository;
+    private final com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
+    private final com.recovermandate.audit.AuditService auditService;
     private final ObjectMapper objectMapper;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private static final List<String> DEMO_CATEGORIES = List.of(
             "insufficient_funds",
@@ -68,9 +78,10 @@ public class DemoController {
                 ? request.getCustomerName()
                 : DEMO_NAMES.get(new Random().nextInt(DEMO_NAMES.size()));
 
+        String randomId = UUID.randomUUID().toString().substring(0, 6);
         String customerEmail = (request != null && request.getCustomerEmail() != null && !request.getCustomerEmail().isBlank())
-                ? request.getCustomerEmail()
-                : customerName.toLowerCase(Locale.ROOT).replace(" ", ".") + "@acme-saas.com";
+                ? request.getCustomerEmail().trim()
+                : "demo.customer+" + randomId + "@example.com";
 
         String bankCode = (request != null && request.getBankCode() != null && !request.getBankCode().isBlank())
                 ? request.getBankCode().toUpperCase(Locale.ROOT)
@@ -225,6 +236,53 @@ public class DemoController {
         flowReport.put("status", "SUCCESS");
         flowReport.put("message", "End-to-end mandate recovery workflow simulated cleanly.");
         return ResponseEntity.ok(flowReport);
+    }
+
+    @PostMapping("/reset-ledger")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Map<String, Object>> resetLedger() {
+        log.info("Executing demo clean reset: wiping test operational tables & resetting audit hash chain to GENESIS...");
+        
+        boolean truncated = false;
+        if (jdbcTemplate != null) {
+            try {
+                jdbcTemplate.execute("TRUNCATE TABLE dispatch_logs, payment_links, retry_schedules, recovery_actions, failure_classifications, webhook_dlq, audit_logs, payment_events CASCADE");
+                truncated = true;
+                log.info("Successfully executed TRUNCATE TABLE ... CASCADE across all operational tables.");
+            } catch (Exception e) {
+                log.warn("TRUNCATE CASCADE failed (falling back to ordered batch deletes): {}", e.getMessage());
+            }
+        }
+
+        if (!truncated) {
+            // Strict reverse foreign-key dependency order (children before parents):
+            // 1. dispatch_logs (references recovery_actions)
+            if (dispatchLogRepository != null) dispatchLogRepository.deleteAllInBatch();
+            // 2. payment_links (references recovery_actions)
+            if (paymentLinkRepository != null) paymentLinkRepository.deleteAllInBatch();
+            // 3. retry_schedules (references payment_events)
+            if (retryScheduleRepository != null) retryScheduleRepository.deleteAllInBatch();
+            // 4. recovery_actions (references failure_classifications)
+            if (recoveryActionRepository != null) recoveryActionRepository.deleteAllInBatch();
+            // 5. failure_classifications (references payment_events)
+            if (failureClassificationRepository != null) failureClassificationRepository.deleteAllInBatch();
+            // 6. webhook_dlq (standalone)
+            if (webhookDlqRepository != null) webhookDlqRepository.deleteAllInBatch();
+            // 7. audit_logs (standalone)
+            if (auditLogRepository != null) auditLogRepository.deleteAllInBatch();
+            // 8. payment_events (parent, deleted last)
+            if (paymentEventRepository != null) paymentEventRepository.deleteAllInBatch();
+        }
+
+        if (auditService != null) {
+            auditService.resetGenesis();
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("status", "SUCCESS");
+        resp.put("message", "Operational ledger cleanly wiped. Audit chain reset to GENESIS root.");
+        resp.put("timestamp", Instant.now().toString());
+        return ResponseEntity.ok(resp);
     }
 
     private String getBankCodeForCategory(String category) {

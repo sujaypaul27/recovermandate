@@ -13,6 +13,8 @@ import {
   Sparkles,
   Search,
   Settings,
+  Keyboard,
+  XCircle,
 } from "lucide-react";
 
 import { API_BASE_URL, API_KEY } from "./lib/api";
@@ -20,6 +22,7 @@ import { useEventSource } from "./hooks/useEventSource";
 import { SystemHealthBanner, SystemHealthStatusDot } from "./components/SystemHealthBanner";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsModal } from "./components/SettingsModal";
+import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { RazorpayMark } from "./components/RazorpayLogo";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -35,6 +38,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [checkoutLinkId, setCheckoutLinkId] = useState<string | null>(null);
 
   // SSE Live Notification States
@@ -85,17 +89,71 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  // Global keyboard shortcut for Command Palette (Ctrl+K / Cmd+K)
+  const handleTabChange = useCallback((tabId: string) => {
+    setActiveTab(tabId);
+    if (tabId === "mandates") setHasNewFailedMandate(false);
+    if (tabId === "approvals") setPendingDraftCount(0);
+  }, []);
+
+  // Global keyboard shortcuts (Ctrl+K, ?, R, 1-4, Esc)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputActive =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl instanceof HTMLSelectElement;
+
+      // Ctrl+K / Cmd+K -> Command Palette
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // If user is currently typing in an input field, do not trigger single-key hotkeys
+      if (isInputActive) {
+        if (e.key === "Escape") {
+          (activeEl as HTMLElement).blur();
+        }
+        return;
+      }
+
+      // '?' -> Toggle Keyboard Shortcuts Help
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      // 'r' or 'R' -> Refresh telemetry
+      if (e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        setRefreshTrigger((prev) => prev + 1);
+        toast({
+          title: "Telemetry Refreshed",
+          description: "Fetched real-time payment telemetry & system health.",
+        });
+        return;
+      }
+
+      // '1' - '4' -> Switch views
+      if (e.key === "1") handleTabChange("dashboard");
+      else if (e.key === "2") handleTabChange("mandates");
+      else if (e.key === "3") handleTabChange("approvals");
+      else if (e.key === "4") handleTabChange("audit");
+
+      // 'Escape' -> Close any modal
+      if (e.key === "Escape") {
+        setIsCommandPaletteOpen(false);
+        setIsSettingsOpen(false);
+        setIsShortcutsOpen(false);
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleTabChange, toast]);
 
   // SSE Event Handler Callback
   const handleSseEvent = useCallback(
@@ -136,7 +194,7 @@ export default function App() {
   );
 
   // Connect to SSE Endpoint
-  const sseUrl = `${API_BASE_URL}/events?apiKey=${encodeURIComponent(API_KEY)}`;
+  const sseUrl = `${API_BASE_URL}/stream/events?apiKey=${encodeURIComponent(API_KEY)}`;
   useEventSource(sseUrl, handleSseEvent);
 
   const navItems = [
@@ -155,12 +213,6 @@ export default function App() {
     },
     { id: "audit", label: "Audit Log", icon: List },
   ];
-
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId);
-    if (tabId === "mandates") setHasNewFailedMandate(false);
-    if (tabId === "approvals") setPendingDraftCount(0);
-  };
 
   if (checkoutLinkId) {
     return (
@@ -186,9 +238,16 @@ export default function App() {
           isOpen={isCommandPaletteOpen}
           onClose={() => setIsCommandPaletteOpen(false)}
           onNavigate={(tab) => {
-            setActiveTab(tab);
+            handleTabChange(tab);
             setIsCommandPaletteOpen(false);
           }}
+          onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        />
+
+        {/* Keyboard Shortcuts Guide Modal */}
+        <KeyboardShortcutsModal
+          isOpen={isShortcutsOpen}
+          onClose={() => setIsShortcutsOpen(false)}
         />
 
         {/* Merchant Settings Modal */}
@@ -310,6 +369,17 @@ export default function App() {
                   <Settings className="w-4 h-4 text-[#3395FF]" />
                   <span className="hidden sm:inline">Settings</span>
                 </button>
+
+                <button
+                  onClick={() => setIsShortcutsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-card text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-700/60"
+                  aria-label="Keyboard Shortcuts Guide"
+                  title="Keyboard Shortcuts Guide (?)"
+                >
+                  <Keyboard className="w-4 h-4 text-[#3395FF]" />
+                  <span className="hidden sm:inline">Shortcuts</span>
+                  <kbd className="hidden lg:inline text-[9px] font-mono px-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-500 font-bold">?</kbd>
+                </button>
               </div>
 
               {/* RecoverMandate Toggle (Dashboard Tab) */}
@@ -319,39 +389,43 @@ export default function App() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="flex items-center gap-3 glass-card rounded-full p-1.5 border-slate-200 dark:border-slate-700/50"
+                    className="flex items-center gap-2.5 glass-card rounded-full p-1.5 border-slate-200 dark:border-slate-700/50 shadow-sm"
+                    title="Toggle between Legacy Mode (Without RecoverMandate) and RecoverMandate AI Active"
                   >
                     <span
                       className={`text-xs font-semibold pl-3 transition-colors ${
-                        !isRecoverMandateEnabled ? "text-slate-900 dark:text-white" : "text-slate-400"
+                        !isRecoverMandateEnabled ? "text-rose-500 font-bold" : "text-slate-400"
                       }`}
                     >
-                      Standard
+                      Legacy Mode
                     </span>
                     <button
                       onClick={() => setIsRecoverMandateEnabled(!isRecoverMandateEnabled)}
-                      className="relative w-14 h-7 rounded-full bg-slate-200 dark:bg-slate-800 transition-colors shadow-inner outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`relative w-14 h-7 rounded-full transition-colors shadow-inner outline-none focus:ring-2 focus:ring-blue-500 ${
+                        isRecoverMandateEnabled ? "bg-gradient-to-r from-blue-600 to-cyan-500" : "bg-slate-300 dark:bg-slate-700"
+                      }`}
+                      aria-label="Toggle RecoverMandate AI comparison mode"
                     >
                       <motion.div
-                        className={`absolute top-1 left-1 w-5 h-5 rounded-full shadow-md flex items-center justify-center ${
-                          isRecoverMandateEnabled
-                            ? "bg-gradient-to-br from-blue-500 to-cyan-400"
-                            : "bg-slate-400 dark:bg-slate-500"
-                        }`}
+                        className="absolute top-1 left-1 w-5 h-5 rounded-full shadow-md flex items-center justify-center bg-white"
                         animate={{ x: isRecoverMandateEnabled ? 28 : 0 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                       >
-                        {isRecoverMandateEnabled && <Sparkles className="w-3 h-3 text-white" />}
+                        {isRecoverMandateEnabled ? (
+                          <Sparkles className="w-3 h-3 text-blue-600" />
+                        ) : (
+                          <XCircle className="w-3 h-3 text-rose-500" />
+                        )}
                       </motion.div>
                     </button>
                     <span
                       className={`text-xs font-semibold pr-3 transition-colors flex items-center gap-1 ${
                         isRecoverMandateEnabled
-                          ? "text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-300"
+                          ? "text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-300 font-bold"
                           : "text-slate-400"
                       }`}
                     >
-                      RecoverMandate
+                      RecoverMandate AI
                     </span>
                   </motion.div>
                 )}
@@ -371,6 +445,7 @@ export default function App() {
                   {activeTab === "dashboard" && (
                     <DashboardPage
                       isEnabled={isRecoverMandateEnabled}
+                      onToggleMode={() => setIsRecoverMandateEnabled(true)}
                       refreshTrigger={refreshTrigger}
                       onNavigate={handleTabChange}
                     />
@@ -378,10 +453,11 @@ export default function App() {
                   {activeTab === "mandates" && (
                     <FailedMandatesPage
                       refreshTrigger={refreshTrigger}
-                      onOpenCheckout={(id) => {
-                        setCheckoutLinkId(`pay_rec_${id}`);
-                        window.location.hash = `pay/pay_rec_${id}`;
+                      onOpenCheckout={(linkId) => {
+                        setCheckoutLinkId(linkId);
+                        window.location.hash = `pay/${linkId}`;
                       }}
+                      onNavigate={handleTabChange}
                     />
                   )}
                   {activeTab === "approvals" && <ApprovalQueuePage refreshTrigger={refreshTrigger} />}

@@ -65,7 +65,7 @@ class RecoveryActionServiceTest {
 
         recoveryActionService.processFailure(classification);
 
-        verify(geminiClient, never()).generateDraft(any(), any(), any(), any(), anyInt());
+        verify(geminiClient, never()).generateDraft(any(), any(), any(), any(), anyInt(), any());
         verify(recoveryActionRepository, never()).save(any());
     }
 
@@ -78,7 +78,7 @@ class RecoveryActionServiceTest {
 
         recoveryActionService.processFailure(classification);
 
-        verify(geminiClient, never()).generateDraft(any(), any(), any(), any(), anyInt());
+        verify(geminiClient, never()).generateDraft(any(), any(), any(), any(), anyInt(), any());
         verify(recoveryActionRepository, never()).save(any());
         verify(auditService).log(
                 eq("FAILURE_CLASSIFICATION"),
@@ -92,7 +92,7 @@ class RecoveryActionServiceTest {
     @Test
     void testProcessFailure_GeminiApiFails_LogsAuditAndSkipsSave() {
         classification.setAutoRecoverable(false);
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(null);
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any())).thenReturn(null);
 
         recoveryActionService.processFailure(classification);
 
@@ -110,7 +110,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_DraftValid_SavesAsDrafted() {
         classification.setAutoRecoverable(false);
         String draft = "Valid draft message";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
         when(validationService.validateDraft(draft, 5000L)).thenReturn(Optional.empty());
 
         RecoveryAction mockSaved = new RecoveryAction();
@@ -142,7 +142,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_DraftInvalid_SavesAsBlocked() {
         classification.setAutoRecoverable(false);
         String draft = "Invalid draft message with discount";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any())).thenReturn(new com.recovermandate.ai.DraftResult(draft, "AI"));
         when(validationService.validateDraft(draft, 5000L)).thenReturn(Optional.of("Contains discount"));
 
         RecoveryAction mockSaved = new RecoveryAction();
@@ -171,7 +171,7 @@ class RecoveryActionServiceTest {
     void testProcessFailure_HeuristicFallback_RecordsHeuristicSource() {
         classification.setAutoRecoverable(false);
         String heuristicDraft = "Dear Customer,\n\nWe were unable to process your payment.";
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt())).thenReturn(new com.recovermandate.ai.DraftResult(heuristicDraft, "HEURISTIC"));
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any())).thenReturn(new com.recovermandate.ai.DraftResult(heuristicDraft, "HEURISTIC"));
         when(validationService.validateDraft(heuristicDraft, 5000L)).thenReturn(Optional.empty());
 
         RecoveryAction mockSaved = new RecoveryAction();
@@ -279,7 +279,7 @@ class RecoveryActionServiceTest {
         classification.setCategory("insufficient_funds");
         classification.setAutoRecoverable(false);
 
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any()))
                 .thenReturn(new com.recovermandate.ai.DraftResult("Valid draft with no issues", "GEMINI"));
         when(validationService.validateDraft(any(), any())).thenReturn(Optional.empty()); // passed validation
         when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> {
@@ -316,7 +316,7 @@ class RecoveryActionServiceTest {
         classification.setCategory("insufficient_funds");
         classification.setAutoRecoverable(false);
 
-        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt()))
+        when(geminiClient.generateDraft(any(), any(), any(), any(), anyInt(), any()))
                 .thenReturn(new com.recovermandate.ai.DraftResult("Draft containing prohibited leak", "GEMINI"));
         when(validationService.validateDraft(any(), any())).thenReturn(Optional.of("Blocked by keyword deny-list"));
         when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> {
@@ -361,5 +361,43 @@ class RecoveryActionServiceTest {
         assertEquals(java.util.List.of(1L), response.getApprovedActionIds());
         assertEquals(1, response.getErrors().size());
         assertEquals(2L, response.getErrors().get(0).getActionId());
+    }
+
+    @Test
+    void testApproveAction_WithNullVersion_SetsDefaultZeroAndSucceeds() {
+        RecoveryAction legacyAction = RecoveryAction.builder()
+                .id(1L)
+                .status("DRAFTED")
+                .version(null) // Simulates pre-existing database record before @Version was added
+                .build();
+
+        when(recoveryActionRepository.findById(1L)).thenReturn(Optional.of(legacyAction));
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertDoesNotThrow(() -> recoveryActionService.approveAction(1L, "SUPPORT_AGENT"));
+        assertEquals(0L, legacyAction.getVersion());
+        assertEquals("APPROVED", legacyAction.getStatus());
+        assertEquals("SUPPORT_AGENT", legacyAction.getApprovedBy());
+    }
+
+    @Test
+    void testApproveAndDispatch_WithNullVersion_SetsDefaultZeroAndDispatchesCleanly() {
+        RecoveryAction legacyAction = RecoveryAction.builder()
+                .id(2L)
+                .status("DRAFTED")
+                .version(null)
+                .build();
+
+        when(recoveryActionRepository.findById(2L)).thenReturn(Optional.of(legacyAction));
+        when(recoveryActionRepository.save(any(RecoveryAction.class))).thenAnswer(i -> i.getArgument(0));
+        com.recovermandate.entity.PaymentLink link = com.recovermandate.entity.PaymentLink.builder()
+                .id(200L).shortUrl("https://rzp.io/l/plink_sim_legacy").build();
+        when(paymentLinkService.createLinkForRecoveryAction(any())).thenReturn(link);
+
+        RecoveryAction dispatched = recoveryActionService.approveAndDispatch(2L, "SUPPORT_AGENT");
+        assertNotNull(dispatched);
+        assertEquals(0L, dispatched.getVersion());
+        assertEquals("DISPATCHED", dispatched.getStatus());
+        verify(dispatchService).dispatchRecovery(any(), eq("https://rzp.io/l/plink_sim_legacy"));
     }
 }

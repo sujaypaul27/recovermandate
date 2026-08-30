@@ -200,7 +200,9 @@ export function CustomerCheckoutPage({
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Customer:</span>
-                  <span className="text-slate-300 font-bold">{safeDetails.customerEmail}</span>
+                  <span className="text-slate-200 font-bold">
+                    {safeDetails.customerName ? `${safeDetails.customerName} (${safeDetails.customerEmail})` : safeDetails.customerEmail}
+                  </span>
                 </div>
               </div>
 

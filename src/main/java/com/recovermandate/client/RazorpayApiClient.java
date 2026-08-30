@@ -106,7 +106,7 @@ public class RazorpayApiClient {
         if (keyId == null || keyId.isBlank() || keySecret == null || keySecret.isBlank()) {
             log.warn("Razorpay API credentials not configured. Generating simulated payment link.");
             String simId = "plink_sim_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 14);
-            String simUrl = "https://rzp.io/simulated/" + java.util.UUID.randomUUID().toString().substring(0, 8);
+            String simUrl = "https://rzp.io/l/" + simId;
             return java.util.Map.of("id", simId, "short_url", simUrl);
         }
 

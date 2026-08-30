@@ -36,7 +36,13 @@ public class AuditLogController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         
-        return auditQueryService.getAuditLogs(entityType, actor, startDate, endDate, PageRequest.of(page, size));
+        return auditQueryService.getAuditLogs(
+                entityType,
+                actor,
+                startDate,
+                endDate,
+                PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "id"))
+        );
     }
 
     @GetMapping("/verify-chain")

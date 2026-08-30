@@ -48,8 +48,11 @@ export interface PaymentEventItem {
   id: number;
   razorpayPaymentId: string;
   razorpaySubscriptionId?: string;
+  subscriptionId?: string;
+  customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  planName?: string;
   eventType: string;
   amount: number;
   currency?: string;
@@ -59,10 +62,14 @@ export interface PaymentEventItem {
   autoRecoverable?: boolean;
   retryCount?: number;
   createdAt?: string;
+  receivedAt?: string;
   classificationCategory?: string;
   classificationStatus?: string;
   errorReason?: string;
   retrySchedules?: RetryScheduleItem[];
+  recoveryActionId?: number;
+  paymentLinkId?: string;
+  paymentLinkUrl?: string;
 }
 
 export interface RecoveryActionItem {
@@ -76,6 +83,7 @@ export interface RecoveryActionItem {
   autoRecoverable?: boolean;
   matchedRule?: string;
   amount?: number;
+  customerName?: string;
   customerEmail?: string;
   aiDraftMessage?: string;
   draftSource?: string;
@@ -95,9 +103,11 @@ export interface AuditLogItem {
   entityId: number;
   action: string;
   actor: string;
-  details: string;
+  details?: string;
+  reasoning?: string;
   traceId?: string;
-  timestamp: string;
+  timestamp?: string;
+  createdAt?: string;
   checksum: string;
   aiModelUsed?: string;
 }
@@ -272,13 +282,28 @@ export async function simulatePaymentPaid(params?: {
   return res.json();
 }
 
-export async function simulateFullFlow(params?: { category?: string; amount?: number }) {
+export async function simulateFullFlow(params?: {
+  category?: string;
+  amount?: number;
+  customerName?: string;
+  customerEmail?: string;
+  bankCode?: string;
+}) {
   const res = await fetch(`${API_BASE_URL}/demo/simulate-full-flow`, {
     method: "POST",
     headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(params || {}),
   });
   if (!res.ok) throw new Error("Failed to simulate end-to-end recovery flow");
+  return res.json();
+}
+
+export async function resetLedger(): Promise<{ status: string; message: string; timestamp: string }> {
+  const res = await fetch(`${API_BASE_URL}/demo/reset-ledger`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to reset operational ledger");
   return res.json();
 }
 
@@ -447,3 +472,26 @@ export async function simulateCheckoutPayment(linkId: string): Promise<{
   }
   return res.json();
 }
+
+export interface BankHealthItem {
+  bankCode: string;
+  bankName: string;
+  status: "OPERATIONAL" | "CBS_MAINTENANCE_WINDOW" | "DEGRADED" | "DOWN";
+  uptime: string;
+  latencyMs: number;
+  isPsuBank: boolean;
+  advice: string;
+  lastEvaluated: string;
+}
+
+export async function fetchBankHealth(): Promise<BankHealthItem[]> {
+  const res = await fetch(`${API_BASE_URL}/health/banks`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Failed to fetch bank health" }));
+    throw new Error(err.error || "Failed to fetch bank health");
+  }
+  return res.json();
+}
+

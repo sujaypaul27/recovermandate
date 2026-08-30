@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,29 +9,45 @@ import {
   RotateCw,
   Ban,
   Zap,
+  AlertTriangle,
 } from "lucide-react";
 import {
   triggerRetryNow,
   cancelRetry,
   type RetryScheduleItem,
 } from "../lib/api";
-import { formatDateIST } from "../lib/formatters";
+import { formatDateIST, formatINR } from "../lib/formatters";
+import { RetryEligibilityLegend } from "./RetryEligibilityLegend";
 
 interface SmartRetryTimelineProps {
   schedules?: RetryScheduleItem[];
   paymentEventId: number;
+  amount?: number;
   onUpdate?: () => void;
 }
 
 export function SmartRetryTimeline({
   schedules = [],
   paymentEventId,
+  amount,
   onUpdate,
 }: SmartRetryTimelineProps) {
   const [actingId, setActingId] = useState<number | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [confirmTrigger, setConfirmTrigger] = useState<{
+    id: number;
+    attemptNumber: number;
+    scheduledAt: string;
+    amount?: number;
+    reason?: string;
+  } | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<{
+    id: number;
+    attemptNumber: number;
+    scheduledAt: string;
+  } | null>(null);
 
-  const handleTrigger = async (id: number) => {
+  const executeTrigger = async (id: number) => {
     setActingId(id);
     setActionMessage(null);
     try {
@@ -48,7 +65,7 @@ export function SmartRetryTimeline({
     }
   };
 
-  const handleCancel = async (id: number) => {
+  const executeCancel = async (id: number) => {
     setActingId(id);
     setActionMessage(null);
     try {
@@ -82,6 +99,12 @@ export function SmartRetryTimeline({
             <Ban className="w-3 h-3" /> Guard Skipped
           </Badge>
         );
+      case "DEFERRED":
+        return (
+          <Badge className="bg-orange-500/15 text-orange-300 border-orange-500/30 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+            <Clock className="w-3 h-3 text-orange-400" /> Deferred (Bank Outage)
+          </Badge>
+        );
       default: // PENDING
         return (
           <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
@@ -94,6 +117,9 @@ export function SmartRetryTimeline({
   const formatReason = (reason?: string) => {
     if (!reason) return "Standard Algorithmic Backoff";
     const lower = reason.toLowerCase();
+    if (lower.includes("bank_outage") || lower.includes("bank_down")) {
+      return "Deferred: Issuer Bank Outage / CBS Maintenance";
+    }
     if (lower.includes("cbs") || lower.includes("psu")) {
       return "Avoiding PSU CBS Batch Window (11:30 PM–3:30 AM)";
     }
@@ -127,9 +153,19 @@ export function SmartRetryTimeline({
             Banking Rail Heuristics
           </span>
         </div>
-        <span className="text-[11px] text-slate-400 font-mono">
-          Event ID #{paymentEventId} · {schedules.length} Retry Windows
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className="text-[11px] font-mono text-slate-300 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700/80 flex items-center gap-1.5 cursor-help shadow-sm"
+            title="Internal Ledger Event ID: System reference key linking this automated retry plan to the intercepted payment failure event (internal tracking reference)."
+          >
+            <span className="text-[#3395FF] font-bold">Ledger Ref:</span>
+            <span>Event #{paymentEventId}</span>
+            <span className="text-[9px] text-slate-400 font-sans italic hidden sm:inline">(Internal Ref)</span>
+          </span>
+          <span className="text-[11px] text-slate-400 font-mono">
+            · {schedules.length} Retry Windows
+          </span>
+        </div>
       </div>
 
       {actionMessage && (
@@ -199,7 +235,13 @@ export function SmartRetryTimeline({
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleTrigger(schedule.id);
+                        setConfirmTrigger({
+                          id: schedule.id,
+                          attemptNumber: schedule.attemptNumber || idx + 1,
+                          scheduledAt: schedule.scheduledAt,
+                          amount: amount,
+                          reason: schedule.scheduleReason,
+                        });
                       }}
                       disabled={isActing}
                       className="h-7 text-xs font-bold bg-[#3395FF] hover:bg-[#2582eb] text-white gap-1 px-2.5 shadow-md shadow-[#3395FF]/20"
@@ -212,7 +254,11 @@ export function SmartRetryTimeline({
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleCancel(schedule.id);
+                        setConfirmCancel({
+                          id: schedule.id,
+                          attemptNumber: schedule.attemptNumber || idx + 1,
+                          scheduledAt: schedule.scheduledAt,
+                        });
                       }}
                       disabled={isActing}
                       className="h-7 text-xs font-bold border-rose-500/40 text-rose-300 hover:bg-rose-950/40 px-2.5"
@@ -227,6 +273,154 @@ export function SmartRetryTimeline({
           })}
         </div>
       )}
+
+      {/* Banking Rail Retry Policy & Category Eligibility Legend */}
+      <RetryEligibilityLegend className="mt-3" defaultExpanded={false} />
+
+      {/* Confirmation Modal for Immediate Retry Trigger */}
+      <AnimatePresence>
+        {confirmTrigger && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setConfirmTrigger(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0C2340] border border-[#3395FF]/40 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30 text-amber-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Execute Immediate Mandate Retry?</h3>
+                  <p className="text-xs text-slate-400">Manual Financial Action · Banking Rails Authorization</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                This will immediately initiate an auto-debit charge against the customer's registered mandate{" "}
+                {confirmTrigger.amount ? (
+                  <strong className="text-emerald-400 font-bold">{formatINR(confirmTrigger.amount)}</strong>
+                ) : (
+                  "for the overdue invoice amount"
+                )}{" "}
+                via the Razorpay Recurring Gateway.
+              </p>
+
+              <div className="p-3 rounded-lg bg-[#02042B] border border-slate-700/80 text-[11px] font-mono text-slate-300 space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Ledger Reference:</span>
+                  <span className="font-bold text-white">Event #{paymentEventId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Target Attempt:</span>
+                  <span className="text-[#3395FF] font-bold">Attempt #{confirmTrigger.attemptNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Authorized Debit:</span>
+                  <span className="text-emerald-400 font-bold font-mono">
+                    {confirmTrigger.amount ? formatINR(confirmTrigger.amount) : "Invoice Amount"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Scheduled Time:</span>
+                  <span className="text-slate-200">{formatDateIST(confirmTrigger.scheduledAt)}</span>
+                </div>
+                {confirmTrigger.reason && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Strategy Window:</span>
+                    <span className="text-slate-300 truncate max-w-[200px]">{formatReason(confirmTrigger.reason)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmTrigger(null)}
+                  className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const id = confirmTrigger.id;
+                    setConfirmTrigger(null);
+                    executeTrigger(id);
+                  }}
+                  className="text-xs font-bold bg-[#3395FF] hover:bg-[#2582eb] text-white shadow-md shadow-[#3395FF]/30 gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  Confirm & Charge Now
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal for Cancel Retry */}
+      <AnimatePresence>
+        {confirmCancel && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setConfirmCancel(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0C2340] border border-rose-500/40 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center border border-rose-500/30 text-rose-400 shrink-0">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Cancel Scheduled Retry Window?</h3>
+                  <p className="text-xs text-slate-400">Bypass Automated Banking Rails Attempt</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Are you sure you want to cancel scheduled retry{" "}
+                <strong className="text-white font-bold">Attempt #{confirmCancel.attemptNumber}</strong>? This attempt will be
+                marked as <code className="text-slate-200 bg-slate-800 px-1 py-0.5 rounded font-mono text-[11px]">SKIPPED</code> and will not debit the customer's account.
+              </p>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmCancel(null)}
+                  className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  Keep Scheduled
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const id = confirmCancel.id;
+                    setConfirmCancel(null);
+                    executeCancel(id);
+                  }}
+                  className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/30 gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Confirm Cancellation
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

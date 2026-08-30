@@ -37,11 +37,23 @@ public class SearchController {
         List<PaymentEvent> events = paymentEventRepository.searchEvents(sanitizedQuery, PageRequest.of(0, 5));
         for (PaymentEvent pe : events) {
             String amountStr = pe.getAmount() != null ? "₹" + String.format("%.2f", pe.getAmount() / 100.0) : "";
+            StringBuilder subtitle = new StringBuilder();
+            subtitle.append(pe.getEventType());
+            if (!amountStr.isEmpty()) {
+                subtitle.append(" · ").append(amountStr);
+            }
+            if (pe.getSubscription() != null) {
+                if (pe.getSubscription().getCustomer() != null && pe.getSubscription().getCustomer().getEmail() != null) {
+                    subtitle.append(" · ").append(pe.getSubscription().getCustomer().getEmail());
+                } else if (pe.getSubscription().getRazorpaySubscriptionId() != null) {
+                    subtitle.append(" · ").append(pe.getSubscription().getRazorpaySubscriptionId());
+                }
+            }
             results.add(SearchResultItem.builder()
                     .id(String.valueOf(pe.getId()))
                     .type("PAYMENT_EVENT")
                     .title(pe.getRazorpayPaymentId())
-                    .subtitle(pe.getEventType() + (amountStr.isEmpty() ? "" : " · " + amountStr))
+                    .subtitle(subtitle.toString())
                     .timestamp(pe.getReceivedAt() != null ? pe.getReceivedAt().toString() : "")
                     .build());
         }

@@ -12,10 +12,10 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-  Copy,
   Calendar,
   X,
   Download,
+  Cpu,
 } from "lucide-react";
 import {
   fetchPaymentEvents,
@@ -26,8 +26,10 @@ import {
 import { TransactionFlowDiagram } from "../components/TransactionFlowDiagram";
 import { RazorpayMark } from "../components/RazorpayLogo";
 import { SmartRetryTimeline } from "../components/SmartRetryTimeline";
+import { RetryEligibilityLegend } from "../components/RetryEligibilityLegend";
 import { EmptyState } from "../components/EmptyState";
 import { formatINR } from "../lib/formatters";
+import { getStatusConfig } from "../lib/statusFormatters";
 
 function getCategoryClass(cat: string | null | undefined) {
   if (!cat) return "";
@@ -45,12 +47,14 @@ function getCategoryLabel(cat: string | null | undefined) {
 
 interface FailedMandatesPageProps {
   refreshTrigger?: number;
-  onOpenCheckout?: (paymentEventId: number) => void;
+  onOpenCheckout?: (linkId: string) => void;
+  onNavigate?: (tab: string) => void;
 }
 
 export function FailedMandatesPage({
   refreshTrigger,
   onOpenCheckout,
+  onNavigate,
 }: FailedMandatesPageProps) {
   const [data, setData] = useState<PageResponse<PaymentEventItem> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,7 @@ export function FailedMandatesPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d">("all");
   const [isExporting, setIsExporting] = useState(false);
+  const [showPolicyLegend, setShowPolicyLegend] = useState(false);
 
   const handleExportCsv = async () => {
     setIsExporting(true);
@@ -98,10 +103,12 @@ export function FailedMandatesPage({
       const q = searchQuery.toLowerCase().trim();
       const matchPaymentId = item.razorpayPaymentId?.toLowerCase().includes(q);
       const matchCategory = item.classificationCategory?.toLowerCase().includes(q);
-      const matchSubId = item.razorpaySubscriptionId?.toLowerCase().includes(q);
-      const matchReason = item.errorReason?.toLowerCase().includes(q);
+      const matchSubId = item.razorpaySubscriptionId?.toLowerCase().includes(q) || item.subscriptionId?.toLowerCase().includes(q);
+      const matchCustName = item.customerName?.toLowerCase().includes(q);
+      const matchCustEmail = item.customerEmail?.toLowerCase().includes(q);
+      const matchReason = item.errorReason?.toLowerCase().includes(q) || item.failureReasonCode?.toLowerCase().includes(q);
       const matchStatus = item.classificationStatus?.toLowerCase().includes(q);
-      if (!matchPaymentId && !matchCategory && !matchSubId && !matchReason && !matchStatus) {
+      if (!matchPaymentId && !matchCategory && !matchSubId && !matchCustName && !matchCustEmail && !matchReason && !matchStatus) {
         return false;
       }
     }
@@ -118,6 +125,12 @@ export function FailedMandatesPage({
     }
 
     return true;
+  })
+  .sort((a: PaymentEventItem, b: PaymentEventItem) => {
+    const timeA = new Date(a.receivedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.receivedAt || b.createdAt || 0).getTime();
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.id || 0) - (a.id || 0);
   });
 
   if (error) {
@@ -140,13 +153,27 @@ export function FailedMandatesPage({
               Live feed of caught Razorpay webhook events. Click any row to inspect the lifecycle flow & retry schedule.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPolicyLegend(!showPolicyLegend)}
+              className={`text-xs font-semibold gap-1.5 transition-all ${
+                showPolicyLegend
+                  ? "bg-[#3395FF]/20 text-[#93c5fd] border-[#3395FF]/50"
+                  : "dark:border-slate-700 text-slate-300 hover:text-white"
+              }`}
+              title="View Auto-Retry eligibility rules across categories"
+            >
+              <Cpu className="w-3.5 h-3.5 text-[#3395FF]" />
+              <span>{showPolicyLegend ? "Hide Policy Legend" : "Retry Policy Legend"}</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportCsv}
               disabled={isExporting}
-              className="dark:border-slate-700 text-xs font-semibold gap-1.5 shadow-sm"
+              className="dark:border-slate-700 text-xs font-semibold gap-1.5"
               title="Download recovery ledger CSV"
             >
               <Download className={`w-3.5 h-3.5 text-blue-500 ${isExporting ? "animate-bounce" : ""}`} />
@@ -158,6 +185,13 @@ export function FailedMandatesPage({
           </div>
         </div>
 
+        {/* Expandable Retry Eligibility Legend */}
+        {showPolicyLegend && (
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900/40">
+            <RetryEligibilityLegend defaultExpanded={true} />
+          </div>
+        )}
+
         {/* Filter Toolbar */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Search Box */}
@@ -165,7 +199,7 @@ export function FailedMandatesPage({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               type="text"
-              placeholder="Search by Payment ID, Category, Sub ID..."
+              placeholder="Search by Payment ID, Customer, Sub ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-8 h-9 text-xs bg-white dark:bg-slate-800/80 border-slate-300 dark:border-slate-700"
@@ -243,6 +277,7 @@ export function FailedMandatesPage({
                   <TableHeader>
                     <TableRow className="border-slate-200 dark:border-slate-800 hover:bg-transparent">
                       <TableHead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Payment ID</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Customer</TableHead>
                       <TableHead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Amount</TableHead>
                       <TableHead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Category</TableHead>
                       <TableHead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Recoverable</TableHead>
@@ -253,6 +288,9 @@ export function FailedMandatesPage({
                   <TableBody>
                     {filteredItems.map((item: PaymentEventItem, i: number) => {
                       const isExpanded = expandedId === item.id;
+                      const customerDisplay = item.customerName || (item.customerEmail ? item.customerEmail.split("@")[0] : "Customer");
+                      const emailDisplay = item.customerEmail || item.subscriptionId || "subscriber@example.com";
+
                       return (
                         <Fragment key={item.id}>
                           <motion.tr
@@ -267,6 +305,16 @@ export function FailedMandatesPage({
                             <TableCell className="font-mono text-sm text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                               {item.razorpayPaymentId}
                             </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
+                                  {customerDisplay}
+                                </span>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                                  {emailDisplay}
+                                </span>
+                              </div>
+                            </TableCell>
                             <TableCell className="font-bold text-slate-900 dark:text-white">
                               {formatINR(item.amount)}
                             </TableCell>
@@ -277,20 +325,34 @@ export function FailedMandatesPage({
                             </TableCell>
                             <TableCell>
                               {item.autoRecoverable ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-1 rounded-md">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20" title="Auto-retry candidate via Smart Retry Engine">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  Yes
+                                  Auto-Retry
+                                </span>
+                              ) : item.classificationCategory === "insufficient_funds" || item.classificationCategory === "expired_mandate" ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20" title="Recoverable via Razorpay Payment Link / Mandate Swap">
+                                  Payment Link
                                 </span>
                               ) : (
                                 <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">
-                                  No
+                                  Manual Triage
                                 </span>
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-100 dark:bg-slate-800/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
-                                {item.classificationStatus || "UNCLASSIFIED"}
-                              </span>
+                              {(() => {
+                                const statusCfg = getStatusConfig(item.classificationStatus);
+                                return (
+                                  <div className="flex flex-col items-end" title={statusCfg.description}>
+                                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.badgeClass}`}>
+                                      {statusCfg.label}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium truncate max-w-[180px]">
+                                      {statusCfg.description}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="text-slate-400">
                               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -300,7 +362,7 @@ export function FailedMandatesPage({
                           {/* Expanded Flow Diagram & Smart Retry Schedule Row */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={6} className="p-4 bg-[#02042B]/90 border-b border-[#3395FF]/30 space-y-4">
+                              <td colSpan={7} className="p-4 bg-[#02042B]/90 border-b border-[#3395FF]/30 space-y-4">
                                 <TransactionFlowDiagram
                                   failurePoint={item.classificationCategory}
                                   category={item.classificationCategory}
@@ -312,6 +374,7 @@ export function FailedMandatesPage({
                                 <SmartRetryTimeline
                                   schedules={item.retrySchedules}
                                   paymentEventId={item.id}
+                                  amount={item.amount}
                                   onUpdate={load}
                                 />
 
@@ -328,37 +391,36 @@ export function FailedMandatesPage({
                                           Ready for Customer
                                         </span>
                                       </div>
-                                      <span className="text-xs font-mono text-[#93c5fd]">
-                                        https://rzp.io/simulated/pay_rec_{item.id}
-                                      </span>
+                                      <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+                                        Customer: <strong className="text-white">{customerDisplay}</strong> ({emailDisplay})
+                                      </p>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 self-end sm:self-auto">
                                     <Button
                                       size="sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        navigator.clipboard.writeText(`https://rzp.io/simulated/pay_rec_${item.id}`);
-                                      }}
-                                      className="bg-[#02042B] hover:bg-[#3395FF]/20 border border-[#3395FF]/40 text-xs font-semibold text-white h-8"
-                                    >
-                                      <Copy className="w-3.5 h-3.5 mr-1 text-[#3395FF]" /> Copy Link
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (onOpenCheckout) {
-                                          onOpenCheckout(item.id);
+                                        const targetLinkId = item.paymentLinkId || (item.paymentLinkUrl ? item.paymentLinkUrl.substring(item.paymentLinkUrl.lastIndexOf('/') + 1) : null);
+                                        if (targetLinkId) {
+                                          if (onOpenCheckout) {
+                                            onOpenCheckout(targetLinkId);
+                                          } else {
+                                            window.open(`/pay/${targetLinkId}`, "_blank");
+                                          }
                                         } else {
-                                          window.location.hash = `pay/pay_rec_${item.id}`;
+                                          if (onNavigate) {
+                                            onNavigate("approvals");
+                                          } else {
+                                            window.location.hash = "approvals";
+                                          }
                                         }
                                       }}
-                                      className="h-8 px-2.5 rounded-lg bg-[#3395FF] hover:bg-[#2582eb] text-white flex items-center gap-1 text-xs font-bold transition-colors shadow-md shadow-[#3395FF]/20"
+                                      className="bg-[#3395FF] hover:bg-[#2582eb] text-white text-xs font-bold gap-1.5 shadow-md shadow-[#3395FF]/20"
                                     >
-                                      <span>Test Checkout</span>
-                                      <ExternalLink className="w-3 h-3" />
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      <span>{item.paymentLinkId ? "Launch Hosted Checkout" : "Review Draft in Queue"}</span>
                                     </Button>
                                   </div>
                                 </div>
@@ -372,33 +434,37 @@ export function FailedMandatesPage({
                 </Table>
               </div>
 
-              {/* Mobile Cards */}
+              {/* Mobile Card List */}
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: PaymentEventItem) => {
                   const isExpanded = expandedId === item.id;
+                  const customerDisplay = item.customerName || (item.customerEmail ? item.customerEmail.split("@")[0] : "Customer");
+                  const emailDisplay = item.customerEmail || item.subscriptionId || "subscriber@example.com";
+                  const statusCfg = getStatusConfig(item.classificationStatus);
+
                   return (
                     <div
                       key={item.id}
                       className="p-4 rounded-xl bg-white dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700/50 shadow-sm space-y-3"
                     >
                       <div className="flex justify-between items-center" onClick={() => toggleExpand(item.id)}>
-                        <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-medium">{item.razorpayPaymentId}</span>
+                        <div>
+                          <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-medium block">{item.razorpayPaymentId}</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{customerDisplay}</span>
+                        </div>
                         <span className="font-bold text-slate-900 dark:text-white text-lg">{formatINR(item.amount)}</span>
                       </div>
-                      <div className="flex justify-between items-center" onClick={() => toggleExpand(item.id)}>
+                      <div className="flex justify-between items-center gap-2 flex-wrap" onClick={() => toggleExpand(item.id)}>
                         <Badge variant="outline" className={`text-[10px] font-bold border ${getCategoryClass(item.classificationCategory)}`}>
                           {getCategoryLabel(item.classificationCategory)}
                         </Badge>
-                        {item.autoRecoverable ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Recoverable
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-500 font-medium">Terminal</span>
-                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusCfg.badgeClass}`} title={statusCfg.description}>
+                          {statusCfg.label}
+                        </span>
                       </div>
                       {isExpanded && (
                         <div className="pt-2 space-y-3">
+                          <p className="text-xs text-slate-400 font-mono">Email: {emailDisplay}</p>
                           <TransactionFlowDiagram
                             failurePoint={item.classificationCategory}
                             category={item.classificationCategory}
@@ -408,6 +474,7 @@ export function FailedMandatesPage({
                           <SmartRetryTimeline
                             schedules={item.retrySchedules}
                             paymentEventId={item.id}
+                            amount={item.amount}
                             onUpdate={load}
                           />
                         </div>

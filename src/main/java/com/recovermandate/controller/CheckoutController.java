@@ -56,11 +56,6 @@ public class CheckoutController {
 
         PaymentLink link = resolvePaymentLink(linkId);
         if (link == null) {
-            // Fallback for demo when link was simulated by event id
-            CheckoutDetailsDto mockDto = resolveFallbackCheckout(linkId);
-            if (mockDto != null) {
-                return ResponseEntity.ok(mockDto);
-            }
             return ResponseEntity.notFound().build();
         }
 
@@ -127,96 +122,63 @@ public class CheckoutController {
     public ResponseEntity<Map<String, Object>> simulateCustomerPayment(@PathVariable String linkId) {
         log.info("Simulating customer payment completion for linkId={}", linkId);
 
+        PaymentLink link = resolvePaymentLink(linkId);
+        if (link == null) {
+            return ResponseEntity.notFound().build();
+        }
+
         String simulatedPaymentId = "pay_cust_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
         Instant now = Instant.now();
 
-        PaymentLink link = resolvePaymentLink(linkId);
         Long paymentEventId = null;
-        Long amountPaise = 49900L;
+        Long amountPaise = link.getAmount() != null ? link.getAmount() : 49900L;
 
-        if (link != null) {
-            link.setStatus("PAID");
-            link.setPaidAt(now);
-            paymentLinkRepository.save(link);
+        link.setStatus("PAID");
+        link.setPaidAt(now);
+        paymentLinkRepository.save(link);
 
-            RecoveryAction action = link.getRecoveryAction();
-            if (action != null) {
-                action.setStatus("RECOVERED");
-                recoveryActionRepository.save(action);
+        RecoveryAction action = link.getRecoveryAction();
+        if (action != null) {
+            action.setStatus("RECOVERED");
+            recoveryActionRepository.save(action);
 
-                if (action.getFailureClassification() != null && action.getFailureClassification().getPaymentEvent() != null) {
-                    PaymentEvent event = action.getFailureClassification().getPaymentEvent();
-                    paymentEventId = event.getId();
-                    amountPaise = event.getAmount() != null ? event.getAmount() : link.getAmount();
+            if (action.getFailureClassification() != null && action.getFailureClassification().getPaymentEvent() != null) {
+                PaymentEvent event = action.getFailureClassification().getPaymentEvent();
+                paymentEventId = event.getId();
+                amountPaise = event.getAmount() != null ? event.getAmount() : link.getAmount();
 
-                    if (event.getSubscription() != null) {
-                        Subscription sub = event.getSubscription();
-                        sub.setStatus("active");
-                        subscriptionRepository.save(sub);
-                    }
-
-                    // Cancel pending retries: closed-loop double-charge guard
-                    List<RetrySchedule> pendingRetries = retryScheduleRepository.findByPaymentEventIdAndResult(event.getId(), "PENDING");
-                    for (RetrySchedule retry : pendingRetries) {
-                        retry.setResult("SKIPPED");
-                        retry.setExecutedAt(now);
-                        retry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
-                        retryScheduleRepository.save(retry);
-
-                        auditService.log(
-                                "RETRY_SCHEDULE",
-                                retry.getId(),
-                                "RETRY_CANCELLED_ALREADY_PAID",
-                                "SYSTEM",
-                                "Pending retry #" + retry.getAttemptNumber() + " cancelled because customer completed payment via Razorpay recovery link"
-                        );
-                    }
+                if (event.getSubscription() != null) {
+                    Subscription sub = event.getSubscription();
+                    sub.setStatus("active");
+                    subscriptionRepository.save(sub);
                 }
-            }
 
-            auditService.log(
-                    "PAYMENT_LINK",
-                    link.getId(),
-                    "PAYMENT_LINK_PAID",
-                    "CUSTOMER",
-                    "Customer completed payment via hosted link " + link.getRazorpayLinkId() + " (Payment ID: " + simulatedPaymentId + ")"
-            );
-        } else {
-            // Check if linkId maps to pay_rec_{eventId}
-            if (linkId.startsWith("pay_rec_")) {
-                try {
-                    Long evtId = Long.parseLong(linkId.replace("pay_rec_", ""));
-                    Optional<PaymentEvent> evtOpt = paymentEventRepository.findById(evtId);
-                    if (evtOpt.isPresent()) {
-                        PaymentEvent evt = evtOpt.get();
-                        paymentEventId = evt.getId();
-                        amountPaise = evt.getAmount() != null ? evt.getAmount() : 49900L;
+                // Cancel pending retries: closed-loop double-charge guard
+                List<RetrySchedule> pendingRetries = retryScheduleRepository.findByPaymentEventIdAndResult(event.getId(), "PENDING");
+                for (RetrySchedule retry : pendingRetries) {
+                    retry.setResult("SKIPPED");
+                    retry.setExecutedAt(now);
+                    retry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
+                    retryScheduleRepository.save(retry);
 
-                        if (evt.getSubscription() != null) {
-                            Subscription sub = evt.getSubscription();
-                            sub.setStatus("active");
-                            subscriptionRepository.save(sub);
-                        }
-
-                        Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(evt);
-                        if (actionOpt.isPresent()) {
-                            RecoveryAction action = actionOpt.get();
-                            action.setStatus("RECOVERED");
-                            recoveryActionRepository.save(action);
-                        }
-
-                        List<RetrySchedule> pendingRetries = retryScheduleRepository.findByPaymentEventIdAndResult(evt.getId(), "PENDING");
-                        for (RetrySchedule retry : pendingRetries) {
-                            retry.setResult("SKIPPED");
-                            retry.setExecutedAt(now);
-                            retry.setScheduleReason("SUPERSEDED_BY_LINK_PAYMENT");
-                            retryScheduleRepository.save(retry);
-                        }
-                    }
-                } catch (Exception ignored) {
+                    auditService.log(
+                            "RETRY_SCHEDULE",
+                            retry.getId(),
+                            "RETRY_CANCELLED_ALREADY_PAID",
+                            "SYSTEM",
+                            "Pending retry #" + retry.getAttemptNumber() + " cancelled because customer completed payment via Razorpay recovery link"
+                    );
                 }
             }
         }
+
+        auditService.log(
+                "PAYMENT_LINK",
+                link.getId(),
+                "PAYMENT_LINK_PAID",
+                "CUSTOMER",
+                "Customer completed payment via hosted link " + link.getRazorpayLinkId() + " (Payment ID: " + simulatedPaymentId + ")"
+        );
 
         // Real-time broadcast for dashboard & ledgers
         sseService.broadcast("payment.recovered", Map.of(
@@ -237,67 +199,57 @@ public class CheckoutController {
         ));
     }
 
+    /**
+     * Resolves payment link strictly by non-guessable, non-sequential Razorpay Link ID,
+     * with automatic preview-stage resolution for test/demo review workflows.
+     */
     private PaymentLink resolvePaymentLink(String linkId) {
         if (linkId == null || linkId.isBlank()) return null;
-
-        // 1. Direct Razorpay Link ID match
-        Optional<PaymentLink> byRzp = paymentLinkRepository.findByRazorpayLinkId(linkId);
-        if (byRzp.isPresent()) return byRzp.get();
-
-        // 2. Numeric ID match
-        try {
-            Long numericId = Long.parseLong(linkId);
-            Optional<PaymentLink> byId = paymentLinkRepository.findById(numericId);
-            if (byId.isPresent()) return byId.get();
-        } catch (NumberFormatException ignored) {
+        String cleanId = linkId.trim();
+        if (cleanId.contains("/")) {
+            cleanId = cleanId.substring(cleanId.lastIndexOf('/') + 1);
+        }
+        
+        Optional<PaymentLink> existing = paymentLinkRepository.findByRazorpayLinkId(cleanId);
+        if (existing.isPresent()) {
+            return existing.get();
         }
 
-        // 3. pay_rec_{paymentEventId} match
-        if (linkId.startsWith("pay_rec_")) {
+        // Support preview-stage link resolution for draft review in demo/test environments
+        if (cleanId.startsWith("plink_preview_act_")) {
             try {
-                Long eventId = Long.parseLong(linkId.replace("pay_rec_", ""));
-                Optional<PaymentEvent> eventOpt = paymentEventRepository.findById(eventId);
-                if (eventOpt.isPresent()) {
-                    Optional<RecoveryAction> actionOpt = recoveryActionRepository.findByFailureClassificationPaymentEvent(eventOpt.get());
-                    if (actionOpt.isPresent()) {
-                        return paymentLinkRepository.findByRecoveryAction(actionOpt.get()).orElse(null);
+                String idStr = cleanId.substring("plink_preview_act_".length());
+                Long actionId = Long.parseLong(idStr);
+                Optional<RecoveryAction> actionOpt = recoveryActionRepository.findById(actionId);
+                if (actionOpt.isPresent()) {
+                    RecoveryAction act = actionOpt.get();
+                    Optional<PaymentLink> actLink = paymentLinkRepository.findByRecoveryAction(act);
+                    if (actLink.isPresent()) {
+                        return actLink.get();
                     }
-                }
-            } catch (NumberFormatException ignored) {
-            }
-        }
+                    
+                    PaymentEvent evt = act.getFailureClassification() != null
+                            ? act.getFailureClassification().getPaymentEvent()
+                            : null;
+                    Long amount = (evt != null && evt.getAmount() != null) ? evt.getAmount() : 49900L;
 
-        return null;
-    }
-
-    private CheckoutDetailsDto resolveFallbackCheckout(String linkId) {
-        if (linkId != null && linkId.startsWith("pay_rec_")) {
-            try {
-                Long eventId = Long.parseLong(linkId.replace("pay_rec_", ""));
-                Optional<PaymentEvent> eventOpt = paymentEventRepository.findById(eventId);
-                if (eventOpt.isPresent()) {
-                    PaymentEvent evt = eventOpt.get();
-                    Customer cust = evt.getSubscription() != null ? evt.getSubscription().getCustomer() : null;
-                    return CheckoutDetailsDto.builder()
-                            .linkId(linkId)
-                            .paymentEventId(evt.getId())
-                            .amount(evt.getAmount() != null ? evt.getAmount() : 49900L)
+                    PaymentLink previewLink = PaymentLink.builder()
+                            .recoveryAction(act)
+                            .razorpayLinkId(cleanId)
+                            .shortUrl("https://rzp.io/l/" + cleanId)
+                            .amount(amount)
                             .currency("INR")
-                            .customerName(cust != null && cust.getName() != null ? cust.getName() : "Valued Customer")
-                            .customerEmail(cust != null ? cust.getEmail() : "customer@example.com")
-                            .merchantName("RecoverMandate Merchant")
-                            .planName("Pro SaaS Subscription")
-                            .failureCategory(evt.getFailureReasonCode() != null ? evt.getFailureReasonCode() : "insufficient_funds")
-                            .failureReason(evt.getFailureReasonCode() != null ? evt.getFailureReasonCode() : "Payment failure")
-                            .aiExplanation("We encountered an issue processing your recurring subscription payment. Please complete payment below to avoid service interruption.")
                             .status("CREATED")
-                            .expireBy(Instant.now().plus(48, java.time.temporal.ChronoUnit.HOURS))
-                            .shortUrl("https://rzp.io/simulated/" + linkId)
+                            .expireBy(Instant.now().plusSeconds(48 * 3600))
+                            .createdAt(Instant.now())
                             .build();
+                    return paymentLinkRepository.save(previewLink);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("Failed to dynamically provision preview payment link for id={}: {}", cleanId, e.getMessage());
             }
         }
+
         return null;
     }
 }

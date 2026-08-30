@@ -5,6 +5,8 @@ import com.recovermandate.entity.Customer;
 import com.recovermandate.entity.DispatchLog;
 import com.recovermandate.entity.PaymentEvent;
 import com.recovermandate.entity.RecoveryAction;
+import com.recovermandate.mail.EmailSendResult;
+import com.recovermandate.mail.EmailService;
 import com.recovermandate.repository.DispatchLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ public class DispatchService {
     private final DispatchLogRepository dispatchLogRepository;
     private final AuditService auditService;
     private final SseService sseService;
+    private final EmailService emailService;
 
     /**
      * Dispatches recovery message with embedded payment link to customer.
@@ -36,8 +39,9 @@ public class DispatchService {
     @Transactional
     public DispatchLog dispatchRecovery(RecoveryAction action, String paymentLinkUrl) {
         Customer customer = null;
+        PaymentEvent event = null;
         if (action.getFailureClassification() != null && action.getFailureClassification().getPaymentEvent() != null) {
-            PaymentEvent event = action.getFailureClassification().getPaymentEvent();
+            event = action.getFailureClassification().getPaymentEvent();
             if (event.getSubscription() != null) {
                 customer = event.getSubscription().getCustomer();
             }
@@ -73,35 +77,88 @@ public class DispatchService {
         }
 
         String maskedRecipient = maskEmail(recipientEmail);
+        String customerName = customer != null ? customer.getName() : "Customer";
+        Long amount = event != null ? event.getAmount() : null;
+        String currency = "INR";
+        String messageText = action.getAiDraftMessage();
 
-        log.info("Dispatching recovery email to {} for action id={} with link {}",
+        log.info("Executing recovery email dispatch to {} for action id={} with link {}",
                 maskedRecipient, action.getId(), paymentLinkUrl);
 
-        // 1. Persist Dispatch Log
+        // 1. Invoke Email Service (Live SMTP or Simulated)
+        EmailSendResult result = emailService.sendRecoveryEmail(
+                recipientEmail,
+                customerName,
+                "Action Required: Your Subscription Mandate Payment Failed",
+                messageText,
+                paymentLinkUrl,
+                amount,
+                currency
+        );
+
+        if (result.isFailed()) {
+            log.error("Email dispatch failed for action id={} recipient={}: {}",
+                    action.getId(), maskedRecipient, result.getErrorMessage());
+
+            DispatchLog failedLog = DispatchLog.builder()
+                    .recoveryAction(action)
+                    .channel("EMAIL")
+                    .recipient(recipientEmail)
+                    .status("DISPATCH_FAILED")
+                    .errorDetail(result.getErrorMessage())
+                    .sentAt(Instant.now())
+                    .build();
+
+            DispatchLog savedLog = dispatchLogRepository.save(failedLog);
+
+            auditService.log(
+                    "RECOVERY_ACTION",
+                    action.getId(),
+                    "DISPATCH_FAILED",
+                    "SYSTEM",
+                    "Email dispatch failed for action id " + action.getId() + " to " + maskedRecipient + ": " + result.getErrorMessage()
+            );
+
+            sseService.broadcast("recovery.dispatch_failed", Map.of(
+                    "actionId", action.getId(),
+                    "recipient", maskedRecipient,
+                    "channel", "EMAIL",
+                    "error", result.getErrorMessage(),
+                    "timestamp", Instant.now().toString()
+            ));
+
+            return savedLog;
+        }
+
+        // 2. Persist Successful Dispatch Log
+        String dispatchMode = result.isRealSent() ? "REAL_SMTP" : "SIMULATED";
         DispatchLog dispatchLog = DispatchLog.builder()
                 .recoveryAction(action)
                 .channel("EMAIL")
                 .recipient(recipientEmail)
                 .status("SENT")
+                .providerMessageId(result.getProviderMessageId())
                 .sentAt(Instant.now())
                 .build();
 
         DispatchLog savedLog = dispatchLogRepository.save(dispatchLog);
 
-        // 2. Audit Record
+        // 3. Cryptographic Audit Record
         auditService.log(
                 "RECOVERY_ACTION",
                 action.getId(),
                 "RECOVERY_DISPATCHED",
                 "SYSTEM",
-                "Dispatched recovery email to " + maskedRecipient + " with payment link " + paymentLinkUrl
+                String.format("Dispatched recovery email (%s) to %s with payment link %s [msgId=%s]",
+                        dispatchMode, maskedRecipient, paymentLinkUrl, result.getProviderMessageId())
         );
 
-        // 3. Real-time SSE Broadcast
+        // 4. Real-time SSE Broadcast
         sseService.broadcast("recovery.dispatched", Map.of(
                 "actionId", action.getId(),
                 "recipient", maskedRecipient,
                 "channel", "EMAIL",
+                "mode", dispatchMode,
                 "paymentLinkUrl", paymentLinkUrl != null ? paymentLinkUrl : "",
                 "timestamp", Instant.now().toString()
         ));

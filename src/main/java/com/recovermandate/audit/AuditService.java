@@ -122,6 +122,11 @@ public class AuditService {
         return lastChecksum;
     }
 
+    public synchronized void resetGenesis() {
+        this.lastChecksum = "GENESIS";
+        log.info("Reset audit log hash chain to GENESIS seed.");
+    }
+
     /**
      * Walks the entire audit log table in chronological order, recomputing expected
      * cryptographic SHA-256 hashes from the GENESIS seed to verify tamper resistance.

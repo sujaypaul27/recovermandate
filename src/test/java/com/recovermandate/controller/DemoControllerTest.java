@@ -47,6 +47,27 @@ class DemoControllerTest {
     @MockBean
     private RecoveryActionRepository recoveryActionRepository;
 
+    @MockBean
+    private com.recovermandate.repository.FailureClassificationRepository failureClassificationRepository;
+
+    @MockBean
+    private com.recovermandate.repository.PaymentEventRepository paymentEventRepository;
+
+    @MockBean
+    private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+
+    @MockBean
+    private com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
+
+    @MockBean
+    private com.recovermandate.repository.AuditLogRepository auditLogRepository;
+
+    @MockBean
+    private com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
+
+    @MockBean
+    private com.recovermandate.audit.AuditService auditService;
+
     @Test
     @DisplayName("POST /api/demo/simulate-failure should return 200 with simulation details")
     void simulateFailure_returnsSuccess() throws Exception {
@@ -71,6 +92,7 @@ class DemoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.category").value("insufficient_funds"))
+                .andExpect(jsonPath("$.customerEmail").isNotEmpty())
                 .andExpect(jsonPath("$.eventId").value(123));
     }
 
@@ -89,5 +111,14 @@ class DemoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.paymentLinkId").value("plink_demo_123"));
+    }
+
+    @Test
+    @DisplayName("POST /api/demo/reset-ledger should clear operational data and return success")
+    void resetLedger_returnsSuccess() throws Exception {
+        mockMvc.perform(post("/api/demo/reset-ledger"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("cleanly wiped")));
     }
 }

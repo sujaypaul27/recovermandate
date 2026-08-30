@@ -17,7 +17,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
            "WHERE (:entityType IS NULL OR a.entityType = :entityType) " +
            "AND (:actor IS NULL OR a.actor = :actor) " +
            "AND (cast(:startDate as timestamp) IS NULL OR a.createdAt >= :startDate) " +
-           "AND (cast(:endDate as timestamp) IS NULL OR a.createdAt <= :endDate)")
+           "AND (cast(:endDate as timestamp) IS NULL OR a.createdAt <= :endDate) " +
+           "ORDER BY a.createdAt DESC, a.id DESC")
     Page<AuditLog> findByFilters(
             @Param("entityType") String entityType,
             @Param("actor") String actor,

@@ -62,5 +62,11 @@ public class RecoveryAction {
     private String actor;
 
     @jakarta.persistence.Version
-    private Long version;
+    @Column(name = "version", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    @Builder.Default
+    private Long version = 0L;
+
+    public Long getVersion() {
+        return version != null ? version : 0L;
+    }
 }

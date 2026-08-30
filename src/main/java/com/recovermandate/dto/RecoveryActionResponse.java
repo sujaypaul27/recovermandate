@@ -31,4 +31,5 @@ public class RecoveryActionResponse {
     private String razorpayPaymentId;
     private Long amount;
     private String customerEmail;
+    private String customerName;
 }

@@ -18,8 +18,10 @@ C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integratio
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\FailureClassificationIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\SecurityIntegrationTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\integration\WebhookIntegrationTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\mail\EmailServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\RecoverMandateApplicationTests.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\scheduler\RetryExecutionSchedulerTest.java
+C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\security\ApiKeyAuthFilterTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\BankHealthServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DashboardServiceTest.java
 C:\Users\Paul\Desktop\recovermandate\src\test\java\com\recovermandate\service\DispatchServiceTest.java

@@ -39,6 +39,7 @@ import {
 } from "../lib/api";
 import { EmptyState } from "../components/EmptyState";
 import { formatDateIST } from "../lib/formatters";
+import { getAuditActionConfig } from "../lib/statusFormatters";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp = {
@@ -173,21 +174,27 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
 
   const rawItems: AuditLogItem[] = data?.content || [];
   const filteredItems = rawItems.filter((log: AuditLogItem) => {
+    const detailsVal = log.details || log.reasoning || "";
+    const actionInfo = getAuditActionConfig(log.action, detailsVal);
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchAction = log.action?.toLowerCase().includes(q);
+      const matchActionLabel = actionInfo.label?.toLowerCase().includes(q);
+      const matchPlainDesc = actionInfo.plainDescription?.toLowerCase().includes(q);
       const matchEntity = log.entityType?.toLowerCase().includes(q);
       const matchActor = log.actor?.toLowerCase().includes(q);
-      const matchDetails = log.details?.toLowerCase().includes(q);
+      const matchDetails = detailsVal.toLowerCase().includes(q);
       const matchTraceId = log.traceId?.toLowerCase().includes(q);
       const matchEntityId = String(log.entityId || "").includes(q);
-      if (!matchAction && !matchEntity && !matchActor && !matchDetails && !matchTraceId && !matchEntityId) {
+      if (!matchAction && !matchActionLabel && !matchPlainDesc && !matchEntity && !matchActor && !matchDetails && !matchTraceId && !matchEntityId) {
         return false;
       }
     }
 
-    if (dateRange !== "all" && log.timestamp) {
-      const logTime = new Date(log.timestamp).getTime();
+    const timestampVal = log.createdAt || log.timestamp;
+    if (dateRange !== "all" && timestampVal) {
+      const logTime = new Date(timestampVal).getTime();
       const now = Date.now();
       const days = dateRange === "7d" ? 7 : 30;
       const cutoff = now - days * 24 * 60 * 60 * 1000;
@@ -197,6 +204,12 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
     }
 
     return true;
+  })
+  .sort((a: AuditLogItem, b: AuditLogItem) => {
+    const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+    const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.id || 0) - (a.id || 0);
   });
 
   if (error) {
@@ -371,6 +384,10 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                 <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 timeline-line ml-2">
                   {filteredItems.map((log: AuditLogItem) => {
                     const actorConfig = getActorConfig(log.actor);
+                    const detailsVal = log.details || log.reasoning || "";
+                    const actionInfo = getAuditActionConfig(log.action, detailsVal);
+                    const timestampVal = log.createdAt || log.timestamp;
+
                     return (
                       <motion.div key={log.id} variants={fadeUp} className="flex gap-5 relative group">
                         <div className="relative z-10 flex-shrink-0 mt-1">
@@ -382,12 +399,13 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                         </div>
 
                         <div className="flex-1 min-w-0 bg-white/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-sm text-slate-900 dark:text-white">{log.action}</span>
                               <Badge
                                 variant="secondary"
                                 className="text-[10px] bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-400 border-slate-300 dark:border-slate-700/50 font-mono font-bold tracking-wider uppercase"
+                                title={`Target internal database entity: ${log.entityType} with ID #${log.entityId}`}
                               >
                                 {log.entityType} #{log.entityId}
                               </Badge>
@@ -402,13 +420,22 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                               )}
                             </div>
                             <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 font-mono tabular-nums shrink-0">
-                              {formatDateIST(log.timestamp)}
+                              {formatDateIST(timestampVal)}
                             </span>
                           </div>
 
-                          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium mb-2">
-                            {log.details}
-                          </p>
+                          {/* Plain-English Human-Readable Summary */}
+                          <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1.5">
+                            <span>💡</span>
+                            <span>{actionInfo.plainDescription}</span>
+                          </div>
+
+                          {/* Context Details */}
+                          {detailsVal && detailsVal !== actionInfo.plainDescription && (
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-mono bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 mb-2 break-all">
+                              {detailsVal}
+                            </p>
+                          )}
 
                           {/* Hash Checksum Footer */}
                           {log.checksum && (

@@ -23,5 +23,7 @@ public class AuditLogResponse {
     private String action;
     private String actor;
     private String reasoning;
+    private String details;
     private Instant createdAt;
+    private Instant timestamp;
 }

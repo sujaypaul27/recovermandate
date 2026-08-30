@@ -64,6 +64,37 @@ class SearchControllerTest {
     }
 
     @Test
+    void search_withCustomerInfo_returnsEnrichedSubtitle() throws Exception {
+        com.recovermandate.entity.Customer cust = com.recovermandate.entity.Customer.builder()
+                .id(1L)
+                .name("Arjun Patel")
+                .email("arjun@example.com")
+                .build();
+        com.recovermandate.entity.Subscription sub = com.recovermandate.entity.Subscription.builder()
+                .id(2L)
+                .customer(cust)
+                .razorpaySubscriptionId("sub_test_999")
+                .build();
+        PaymentEvent pe = PaymentEvent.builder()
+                .id(1L)
+                .razorpayPaymentId("pay_search_456")
+                .eventType("payment.failed")
+                .amount(29900L)
+                .subscription(sub)
+                .receivedAt(Instant.now())
+                .build();
+
+        when(paymentEventRepository.searchEvents(eq("arjun"), any())).thenReturn(List.of(pe));
+        when(auditLogRepository.searchAuditLogs(eq("arjun"), any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/search?q=arjun"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].title").value("pay_search_456"))
+                .andExpect(jsonPath("$[0].subtitle").value(org.hamcrest.Matchers.containsString("arjun@example.com")));
+    }
+
+    @Test
     void search_emptyQuery_returnsEmptyList() throws Exception {
         mockMvc.perform(get("/api/search?q="))
                 .andExpect(status().isOk())

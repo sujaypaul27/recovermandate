@@ -129,7 +129,7 @@ class DashboardServiceTest {
         assertNotNull(csv);
         String csvString = new String(csv, java.nio.charset.StandardCharsets.UTF_8);
 
-        assertTrue(csvString.contains("Payment ID,Subscription ID,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash"));
+        assertTrue(csvString.contains("Payment ID,Subscription ID,Customer Name,Customer Email,Failure Category,Original Failure Time,Recovery Channel,Settled Amount (INR),Status,Audit Hash"));
         assertTrue(csvString.contains("pay_123"));
         assertTrue(csvString.contains("insufficient_funds"));
         assertTrue(csvString.contains("RAZORPAY_PAYMENT_LINK"));
