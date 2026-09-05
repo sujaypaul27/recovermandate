@@ -68,6 +68,12 @@ Set these variables in your environment or an `.env` file before running the app
 > **Zero Configuration Required for Local Demo Mode:**  
 > The application includes working local defaults and a built-in sandbox simulator. If external API keys (Gemini, Razorpay, or Gmail) are left blank, RecoverMandate automatically activates offline fallback engines (heuristic templates, local preview links, and simulated email delivery) so you can test all features immediately.
 
+> **Note on webhooks and ngrok:** This project includes a built-in demo simulator that replicates real Razorpay webhook payloads locally, so you can experience the full recovery pipeline (classification, retries, AI drafts, payment links) without exposing your machine to the internet. **You do not need ngrok to try the demo.**
+>
+> If you want to test genuinely live Razorpay webhook delivery (real payments hitting your local server instead of the simulator), you'll need a tool like [ngrok](https://ngrok.com) to expose your local port 8080 with a public HTTPS URL, which you then register in your Razorpay Dashboard's webhook settings. This is optional and only needed for live payment testing, not for running or judging the core project.
+
+### Summary of Environment Variables
+
 | Variable | What it's for | Where to get it | Required? |
 |----------|---------------|------------------|-----------|
 | `DB_URL` | Connection string for your PostgreSQL database | Any Postgres instance (e.g. free Supabase project) | Yes |
@@ -79,6 +85,74 @@ Set these variables in your environment or an `.env` file before running the app
 | `GEMINI_API_KEY` | Powers the AI-generated recovery emails | Google AI Studio (aistudio.google.com) — free tier available | No — falls back to rule-based templates if missing |
 | `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | Sends real recovery emails via Gmail | A Gmail account + an "App Password" (not your normal Gmail password) generated in Google Account settings | No — emails are simulated/logged instead of sent if missing |
 | `API_KEY` | Protects internal/demo endpoints from random access | You choose any string yourself | Yes, but has a working default for local testing |
+
+---
+
+### Detailed Setup: Getting Each Credential
+
+#### 1. Database (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`)
+- **What it's for:** Needed for the application to store payment events, failure classifications, customer records, retry schedules, and cryptographic audit logs.
+- **Step-by-step instructions:**
+  1. Sign up for a free account at [supabase.com](https://supabase.com).
+  2. Create a new project and set a database password (remember this password).
+  3. Once your project is created, navigate to **Project Settings** (gear icon) → **Database**.
+  4. Under the **Connection string** section, select the **URI** tab and copy the connection string for `DB_URL` (format: `postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres`).
+  5. Use the user shown (typically `postgres`) for `DB_USERNAME`, and the password you chose during setup for `DB_PASSWORD`.
+- **Alternative (Local PostgreSQL):** Any local PostgreSQL installation works as well:
+  - `DB_URL`: `jdbc:postgresql://localhost:5432/recovermandate`
+  - `DB_USERNAME`: `postgres`
+  - `DB_PASSWORD`: `postgres`
+
+#### 2. Razorpay API Keys (`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`)
+- **What it's for:** Identifies your Razorpay account so RecoverMandate can call Razorpay's API to generate 1-click hosted payment links, cancel active links when an automated retry succeeds, and query live settlement status.
+- **Step-by-step instructions:**
+  1. Sign up or log in at [razorpay.com](https://razorpay.com).
+  2. In your Razorpay Dashboard, make sure the toggle in the top-right is switched to **Test Mode** (never use live credentials for testing).
+  3. Navigate to **Account & Settings** (or **Settings**) → **API Keys**.
+  4. Click **Generate Test Key**.
+  5. Copy the **Key Id** (starts with `rzp_test_...`) and **Key Secret** shown.
+  6. Save the Key Secret immediately — Razorpay displays it only once and cannot show it again.
+- **Note:** These keys are optional. If left blank, RecoverMandate automatically activates its local interactive checkout simulation engine (`/#/pay/...`), so you can test complete payment recovery without credentials.
+
+#### 3. Razorpay Webhook Secret (`RAZORPAY_WEBHOOK_SECRET`)
+- **What it's for:** Lets the application cryptographically verify (via HMAC-SHA256) that an incoming webhook really came from Razorpay and was not spoofed or intercepted by a third party.
+- **Step-by-step instructions:**
+  1. This is only needed if you are testing genuinely live webhooks routed to your local server via ngrok (see the note above).
+  2. In your Razorpay Dashboard (Test Mode), navigate to **Account & Settings** → **Webhooks** → **Add New Webhook**.
+  3. In the **Webhook URL** field, enter your public ngrok HTTPS URL followed by `/api/webhooks/razorpay` (e.g. `https://your-subdomain.ngrok-free.app/api/webhooks/razorpay`).
+  4. In the **Secret** field, enter any secret string of your choice (e.g. `my_secure_webhook_secret_123`).
+  5. Under **Active Events**, select `payment.failed` (and optionally `payment_link.paid`, `payment_link.expired`).
+  6. Click **Create Webhook**, and copy that exact secret string into `RAZORPAY_WEBHOOK_SECRET`.
+
+#### 4. Google Gemini API Key (`GEMINI_API_KEY`)
+- **What it's for:** Powers AI-generated, personalized recovery emails tailored to the specific failure category instead of static templates.
+- **Step-by-step instructions:**
+  1. Go to [Google AI Studio](https://aistudio.google.com).
+  2. Sign in with your Google account.
+  3. Click **Get API Key** in the left sidebar.
+  4. Click **Create API Key** (choose a Google Cloud project or let AI Studio create one for you).
+  5. Copy the generated key and assign it to `GEMINI_API_KEY`.
+- **Note:** This key is optional. If left blank, RecoverMandate automatically falls back to its built-in rule-based email templates (`HeuristicFallbackEngine`), so all recovery actions draft cleanly without an external API key.
+
+#### 5. Email Dispatch Credentials (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `MAIL_FROM`)
+- **What it's for:** Lets the application actually send recovery emails to customers via Gmail rather than only simulating and logging them.
+- **Step-by-step instructions:**
+  1. Use any standard Gmail account.
+  2. Go to your Google Account security center at [myaccount.google.com/security](https://myaccount.google.com/security).
+  3. Under **How you sign in to Google**, enable **2-Step Verification** if it is not already turned on.
+  4. Use the search bar in your Google Account settings to search for **App Passwords**.
+  5. Create a new App Password (enter a name like `RecoverMandate`) and click **Create**.
+  6. Google will display a 16-character passcode (e.g. `abcd efgh ijkl mnop`).
+  7. Use your full Gmail address as `SPRING_MAIL_USERNAME` and `MAIL_FROM`.
+  8. Use the generated 16-character passcode (without spaces) as `SPRING_MAIL_PASSWORD` (not your normal Gmail login password).
+- **Note:** `SPRING_MAIL_HOST` (`smtp.gmail.com`) and `SPRING_MAIL_PORT` (`587`) already have default settings and do not need to be changed. If credentials are left blank, email delivery is simulated and logged locally without errors.
+
+#### 6. Internal API Key (`API_KEY`)
+- **What it's for:** Protects internal and demo endpoints (`/api/**`) from unauthorized access while allowing public access to customer checkout portals.
+- **Step-by-step instructions:**
+  1. You can choose any custom string yourself (e.g. `my-local-dev-key`).
+  2. No external account or registration is required.
+- **Note:** Has a working default (`default-dev-key`) if left unset for instant local testing.
 
 ---
 
