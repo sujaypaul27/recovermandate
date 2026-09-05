@@ -242,7 +242,7 @@ When a recurring subscription mandate fails permanently—such as an **expired d
 
 ## 6. Completed Legacy Phases
 
-All 14 original development phases are complete (Core Domain → Award-Winning UX). See legacy PROJECT_CONTEXT.md for full history.
+All 14 original development phases are complete (Core Domain → Award-Winning UX). See [legacy phase history](docs/legacy/PROTOTYPE_PHASES.md) for full history.
 
 ---
 
