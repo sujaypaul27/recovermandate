@@ -29,16 +29,22 @@ public class HealthController {
     private final Optional<CircuitBreakerRegistry> circuitBreakerRegistry;
     private final Optional<DataSource> dataSource;
     private final Optional<BankHealthService> bankHealthService;
+    private final Optional<com.recovermandate.client.RazorpayApiClient> razorpayApiClient;
+    private final Optional<com.recovermandate.ai.GeminiClient> geminiClient;
 
     private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
 
     public HealthController(
             @Autowired(required = false) CircuitBreakerRegistry circuitBreakerRegistry,
             @Autowired(required = false) DataSource dataSource,
-            @Autowired(required = false) BankHealthService bankHealthService) {
+            @Autowired(required = false) BankHealthService bankHealthService,
+            @Autowired(required = false) com.recovermandate.client.RazorpayApiClient razorpayApiClient,
+            @Autowired(required = false) com.recovermandate.ai.GeminiClient geminiClient) {
         this.circuitBreakerRegistry = Optional.ofNullable(circuitBreakerRegistry);
         this.dataSource = Optional.ofNullable(dataSource);
         this.bankHealthService = Optional.ofNullable(bankHealthService);
+        this.razorpayApiClient = Optional.ofNullable(razorpayApiClient);
+        this.geminiClient = Optional.ofNullable(geminiClient);
     }
 
     @GetMapping
@@ -74,10 +80,11 @@ public class HealthController {
             }
         }
 
+        String activeModel = geminiClient.map(com.recovermandate.ai.GeminiClient::getModelEndpoint).orElse("gemini-3.5-flash-lite");
         response.put("geminiApi", Map.of(
                 "status", geminiStatus,
                 "circuitBreakerState", circuitState,
-                "model", "gemini-3.5-flash-lite",
+                "model", activeModel,
                 "fallbackEngine", "HeuristicFallbackEngine"
         ));
 
@@ -98,6 +105,15 @@ public class HealthController {
 
         response.put("database", Map.of(
                 "status", dbStatus
+        ));
+
+        // 3. Check Razorpay API Configuration Mode (Live vs Simulated)
+        boolean isRazorpayLive = razorpayApiClient.map(com.recovermandate.client.RazorpayApiClient::isLiveMode).orElse(false);
+        response.put("razorpayApi", Map.of(
+                "configured", isRazorpayLive,
+                "mode", isRazorpayLive ? "LIVE" : "SIMULATED",
+                "status", isRazorpayLive ? "UP" : "SIMULATED_LOCAL",
+                "gateway", "Razorpay Payment Links v1"
         ));
 
         response.put("status", overallStatus);

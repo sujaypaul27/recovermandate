@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Mail,
   Check,
+  CreditCard,
 } from "lucide-react";
 import {
   fetchDashboardSummary,
@@ -32,6 +33,7 @@ import {
   resetLedger,
   exportRecoveryLedgerCsv,
   fetchBankHealth,
+  fetchSystemHealth,
   type DashboardSummary,
   type BankHealthItem,
 } from "../lib/api";
@@ -143,40 +145,40 @@ export function HeroStory() {
         </motion.div>
 
         {/* Sequence Flow */}
-        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 shadow-md backdrop-blur-md">
-            <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-3 gap-5 relative">
+          <motion.div variants={fadeUp} className="p-6 rounded-2xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-col gap-3.5 shadow-lg backdrop-blur-md transition-all hover:border-rose-500/40">
+            <div className="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center shadow-sm">
               <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">1. Intercept & Classify</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
-                Razorpay emits `payment.failed`. We classify failure reason & check bank uptime.
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">1. Intercept &amp; Classify</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed block">
+                Razorpay emits `payment.failed`. We classify failure reason &amp; check bank uptime.
               </span>
             </div>
           </motion.div>
 
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 flex flex-col gap-3 shadow-md backdrop-blur-md">
+          <motion.div variants={fadeUp} className="p-6 rounded-2xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-col gap-3.5 shadow-lg backdrop-blur-md transition-all hover:border-purple-500/40">
             <ArrowRight className="w-6 h-6 text-slate-300 dark:text-slate-600 absolute -left-5 top-1/2 -translate-y-1/2 hidden md:block z-0" />
-            <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center shadow-sm">
               <Bot className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">2. AI Draft & Link Generation</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">2. AI Draft &amp; Link Generation</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed block">
                 Resilient Gemini / heuristic engine generates custom recovery drafts and Razorpay link.
               </span>
             </div>
           </motion.div>
 
-          <motion.div variants={fadeUp} className="p-5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-emerald-500/30 flex flex-col gap-3 shadow-emerald-500/10 shadow-lg backdrop-blur-md">
+          <motion.div variants={fadeUp} className="p-6 rounded-2xl bg-white/80 dark:bg-slate-800/80 border border-emerald-500/30 flex flex-col gap-3.5 shadow-emerald-500/10 shadow-xl backdrop-blur-md transition-all hover:border-emerald-500/50">
             <ArrowRight className="w-6 h-6 text-slate-300 dark:text-slate-600 absolute -left-5 top-1/2 -translate-y-1/2 hidden md:block z-0" />
-            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shadow-sm">
               <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">3. Approve & Recover</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 leading-normal block">
+              <span className="font-bold text-slate-800 dark:text-white text-base block mb-1">3. Approve &amp; Recover</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed block">
                 1-click approval dispatches recovery email. Revenue is salvaged within hours.
               </span>
             </div>
@@ -335,13 +337,16 @@ function CategoryBreakdownChart({ data }: { data: Record<string, number> }) {
 function LiveDemoSimulator({
   onSimulated,
   onNavigate,
+  confirmedEmail,
+  onConfirmedEmailChange,
 }: {
   onSimulated: () => void;
   onNavigate?: (tab: string) => void;
+  confirmedEmail?: string | null;
+  onConfirmedEmailChange?: (email: string | null) => void;
 }) {
   const [selectedCategory, setSelectedCategory] = useState("insufficient_funds");
-  const [emailInput, setEmailInput] = useState("");
-  const [confirmedEmail, setConfirmedEmail] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState(confirmedEmail || "sujaypaul2711@gmail.com");
   const [emailError, setEmailError] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [isFullFlowSimulating, setIsFullFlowSimulating] = useState(false);
@@ -349,6 +354,25 @@ function LiveDemoSimulator({
   const [completedStages, setCompletedStages] = useState<number[]>([]);
   const [lastResult, setLastResult] = useState<any>(null);
   const [isPayingLink, setIsPayingLink] = useState(false);
+  const [razorpayApiMode, setRazorpayApiMode] = useState<"LIVE" | "SIMULATED">("SIMULATED");
+
+  useEffect(() => {
+    fetchSystemHealth()
+      .then((h) => {
+        if (h?.razorpayApi?.mode === "LIVE" || h?.razorpayApi?.configured === true) {
+          setRazorpayApiMode("LIVE");
+        } else {
+          setRazorpayApiMode("SIMULATED");
+        }
+      })
+      .catch(() => setRazorpayApiMode("SIMULATED"));
+  }, []);
+
+  useEffect(() => {
+    if (confirmedEmail) {
+      setEmailInput(confirmedEmail);
+    }
+  }, [confirmedEmail]);
 
   const handleConfirmEmail = () => {
     const trimmed = emailInput.trim();
@@ -361,13 +385,13 @@ function LiveDemoSimulator({
       return;
     }
     setEmailError("");
-    setConfirmedEmail(trimmed);
+    onConfirmedEmailChange?.(trimmed);
   };
 
   const handleClearEmail = () => {
     setEmailInput("");
-    setConfirmedEmail(null);
     setEmailError("");
+    onConfirmedEmailChange?.(null);
   };
 
   const categories = [
@@ -546,146 +570,206 @@ function LiveDemoSimulator({
   };
 
   return (
-    <div className="glass-card rounded-2xl p-6 border-blue-500/30 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-cyan-500/5 shadow-xl relative overflow-hidden space-y-4">
-      {/* ─── Top Toolbar: Header, Mode Status Badge & Main Triggers ─── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Live Demo Simulator
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 uppercase tracking-wider">
+    <div className="glass-card rounded-3xl p-6 sm:p-8 border-blue-500/30 bg-gradient-to-b from-[#08172E]/95 via-[#061224]/95 to-[#030914]/95 shadow-2xl shadow-blue-950/40 relative overflow-hidden space-y-6">
+      {/* ─── Top Header: Title & Fast-Track Badge ─── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                Live Demo Simulator
+              </h3>
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-wider">
                 Jury Fast-Track
               </span>
-            </h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Trigger simulated Razorpay webhook failures, observe real-time AI triage &amp; dunning, and watch end-to-end recovery live.
+            </p>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Trigger simulated Razorpay webhook failures, observe real-time AI triage & dunning, and watch end-to-end recovery live.
-          </p>
         </div>
+      </div>
 
-        {/* Action Controls & Prominent Mode Indicator */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-wrap">
-          {/* Active Mode Status Badge */}
+      {/* ─── System Rails Status & Action Toolbar ─── */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#030A17]/85 border border-blue-500/20 backdrop-blur-md flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-inner">
+        {/* Left: System Status Rails */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-blue-400" />
+            System Rails:
+          </span>
+
+          {/* Target Recipient Email Delivery Status */}
           {confirmedEmail ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold shadow-sm">
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <span className="truncate max-w-[200px]" title={confirmedEmail}>
-                ✅ Using: {confirmedEmail}
+              <span className="truncate max-w-[220px]" title={confirmedEmail}>
+                📧 Real Email Delivery: {confirmedEmail}
               </span>
               <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 font-sans font-extrabold ml-1">
-                Live Test
+                Real Inbox
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-slate-400 text-xs font-mono font-medium shadow-sm">
-              <span>🎭 Using: Demo Auto-Generated Email</span>
-              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-sans font-bold ml-1">
-                Simulated
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-400 text-xs font-mono font-medium shadow-sm">
+              <span>🎭 Simulated Email (Not Delivered)</span>
+              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-sans font-bold ml-1">
+                Demo Only
               </span>
             </div>
           )}
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleResetLedger}
-              disabled={isSimulating || isFullFlowSimulating || isResetting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-              title="Wipe demo records and reset cryptographic audit chain to GENESIS seed"
+          {/* Separate Payment Link Gateway Mode Indicator */}
+          <div
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold shadow-sm border ${
+              razorpayApiMode === "LIVE"
+                ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300"
+                : "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+            }`}
+            title={
+              razorpayApiMode === "LIVE"
+                ? "Razorpay API Keys Configured: Live hosted rzp.io payment links generated"
+                : "No Razorpay API Keys: Using RecoverMandate built-in demo checkout route"
+            }
+          >
+            <CreditCard className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              {razorpayApiMode === "LIVE"
+                ? "💳 Payment Links: Live Razorpay API"
+                : "💳 Payment Links: Simulated Mode"}
+            </span>
+            <span
+              className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-sans font-extrabold ml-1 border ${
+                razorpayApiMode === "LIVE"
+                  ? "bg-cyan-500/20 text-cyan-200 border-cyan-500/30"
+                  : "bg-indigo-500/20 text-indigo-200 border-indigo-500/30"
+              }`}
             >
-              <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? "animate-spin" : ""}`} />
-              <span>{isResetting ? "Resetting..." : "Reset"}</span>
-            </button>
-
-            <button
-              onClick={handleSimulateFailure}
-              disabled={isSimulating || isFullFlowSimulating || isResetting}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold border border-slate-300 dark:border-slate-700 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-            >
-              <Play className={`w-3.5 h-3.5 text-blue-500 ${isSimulating ? "animate-spin" : ""}`} />
-              {isSimulating ? "Triage in Progress..." : "1. Simulate Failure (Step 1-3)"}
-            </button>
-
-            <button
-              onClick={handleSimulateFullFlow}
-              disabled={isSimulating || isFullFlowSimulating || isResetting}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-500/25 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-            >
-              <Zap className={`w-3.5 h-3.5 text-amber-300 ${isFullFlowSimulating ? "animate-bounce" : ""}`} />
-              {isFullFlowSimulating ? "Simulating Pipeline..." : "🚀 Full 5-Stage Recovery (1-Click)"}
-            </button>
+              {razorpayApiMode === "LIVE" ? "Live Gateway" : "Demo Checkout"}
+            </span>
           </div>
+        </div>
+
+        {/* Right: Action Buttons with micro-animations */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleResetLedger}
+            disabled={isSimulating || isFullFlowSimulating || isResetting}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            title="Wipe demo records and reset cryptographic audit chain to GENESIS seed"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? "animate-spin" : ""}`} />
+            <span>{isResetting ? "Resetting..." : "Reset Ledger"}</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSimulateFailure}
+            disabled={isSimulating || isFullFlowSimulating || isResetting}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-100 text-xs font-bold border border-blue-500/30 hover:border-blue-500/60 shadow-md shadow-blue-950/30 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Play className={`w-3.5 h-3.5 text-blue-400 ${isSimulating ? "animate-spin" : ""}`} />
+            {isSimulating ? "Triage in Progress..." : "1. Simulate Failure (Step 1-3)"}
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={handleSimulateFullFlow}
+            disabled={isSimulating || isFullFlowSimulating || isResetting}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Zap className={`w-4 h-4 text-amber-300 ${isFullFlowSimulating ? "animate-bounce" : ""}`} />
+            {isFullFlowSimulating ? "Simulating Pipeline..." : "🚀 Full 5-Stage Recovery (1-Click)"}
+          </motion.button>
         </div>
       </div>
 
-      {/* ─── Row 1: Failure Scenario Selection Pills (Full Width) ─── */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1 shrink-0">Failure Scenario:</span>
-        {categories.map((c) => {
-          const isSelected = selectedCategory === c.id;
-          return (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCategory(c.id)}
-              disabled={isSimulating || isFullFlowSimulating}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-                isSelected
-                  ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
-                  : "bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60"
-              }`}
-            >
-              <span>{c.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
-                isSelected ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-              }`}>
-                {c.bank} · ₹{(c.amount / 100).toLocaleString("en-IN")}
-              </span>
-            </button>
-          );
-        })}
+      {/* ─── Failure Scenario Selection Pills (Generous Spacing) ─── */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-blue-400" />
+            Failure Scenario Preset:
+          </span>
+          <span className="text-[11px] text-slate-500 hidden sm:inline">
+            Select failure reason to simulate targeted AI recovery workflow
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 pt-0.5">
+          {categories.map((c) => {
+            const isSelected = selectedCategory === c.id;
+            return (
+              <motion.button
+                key={c.id}
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={() => setSelectedCategory(c.id)}
+                disabled={isSimulating || isFullFlowSimulating}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2.5 cursor-pointer ${
+                  isSelected
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 border border-blue-400/50"
+                    : "bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-700/70"
+                }`}
+              >
+                <span>{c.label}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-semibold ${
+                  isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                }`}>
+                  {c.bank} · ₹{(c.amount / 100).toLocaleString("en-IN")}
+                </span>
+              </motion.button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ─── Row 2: Dedicated Email Target Row & Confirmation Panel ─── */}
-      <div className="p-3.5 rounded-xl bg-[#061530]/90 border border-blue-500/20 shadow-inner flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0">
-            <Mail className="w-4 h-4" />
+      {/* ─── Target Recipient Email (Dedicated Spacious Card) ─── */}
+      <div className="p-5 sm:p-6 rounded-2xl bg-[#040D1F]/95 border border-blue-500/30 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="flex items-start sm:items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/15">
+            <Mail className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-200">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-slate-100">
                 Target Recipient Email
               </span>
-              <span className="text-[10px] font-mono text-slate-400">
-                (For Real Inbox Delivery)
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                Real Transactional Delivery
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
-              Enter your email to receive live transactional recovery emails upon <strong className="text-slate-300">Approve &amp; Dispatch</strong>, or leave unconfirmed for simulated demo data.
+            <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
+              Enter your email to receive live transactional recovery emails upon <strong className="text-slate-200">Approve &amp; Dispatch</strong>, or leave unconfirmed for simulated demo data (not delivered to inbox).
             </p>
           </div>
         </div>
 
         {/* Input & Two-State Confirmation Controls */}
-        <div className="flex items-center gap-2 self-start md:self-auto shrink-0 flex-wrap">
+        <div className="flex items-center gap-3 self-start lg:self-auto shrink-0 flex-wrap">
           {confirmedEmail ? (
-            <div className="flex items-center gap-2.5 bg-emerald-950/60 border border-emerald-500/40 px-3 py-1.5 rounded-xl shadow-sm">
-              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-300">
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{confirmedEmail}</span>
+            <div className="flex items-center gap-3 bg-emerald-950/70 border border-emerald-500/40 px-4 py-2.5 rounded-2xl shadow-md">
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-300">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="truncate max-w-[240px]">📧 Real Email Delivery: {confirmedEmail}</span>
               </div>
               <button
                 onClick={handleClearEmail}
-                className="text-[11px] text-slate-400 hover:text-rose-300 font-semibold underline underline-offset-2 transition-colors cursor-pointer ml-1"
-                title="Switch back to synthetic demo email"
+                className="text-xs text-slate-400 hover:text-rose-300 font-semibold underline underline-offset-4 transition-colors cursor-pointer ml-1"
+                title="Switch back to simulated email (not delivered)"
               >
-                Reset to Demo Mode
+                Reset to Simulated Mode
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2.5">
               <div className="relative">
                 <input
                   type="email"
@@ -698,38 +782,40 @@ function LiveDemoSimulator({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleConfirmEmail();
                   }}
-                  className={`h-8 px-3 text-xs bg-[#02042B] text-slate-100 placeholder:text-slate-500 rounded-lg border font-mono outline-none w-56 sm:w-64 focus:border-blue-500 transition-colors ${
-                    emailError ? "border-rose-500" : "border-slate-700/80"
+                  className={`h-10 px-4 text-xs bg-[#020517] text-slate-100 placeholder:text-slate-500 rounded-xl border font-mono outline-none w-60 sm:w-72 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all ${
+                    emailError ? "border-rose-500" : "border-slate-700/90"
                   }`}
                 />
                 {emailError && (
-                  <span className="absolute -bottom-4 left-0 text-[10px] text-rose-400 font-medium">
+                  <span className="absolute -bottom-5 left-0 text-[10px] text-rose-400 font-medium">
                     {emailError}
                   </span>
                 )}
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handleConfirmEmail}
                 disabled={!emailInput.trim()}
-                className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                title="Lock in this email address for subsequent failure simulations"
+                className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/25 flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Lock in this email address for real transactional email delivery"
               >
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-4 h-4" />
                 <span>Use This Email</span>
-              </button>
+              </motion.button>
             </div>
           )}
         </div>
       </div>
 
       {/* ─── Horizontal 5-Stage Live Recovery Stepper ──────────────────────── */}
-      <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-inner">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-blue-400" />
+      <div className="p-5 sm:p-6 rounded-2xl bg-[#020713]/90 border border-slate-800 shadow-inner space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
             Live Recovery Pipeline Progression
           </span>
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
             {completedStages.length === 5
               ? "✅ Cycle Complete (100% Recovered)"
               : completedStages.length > 0
@@ -738,7 +824,7 @@ function LiveDemoSimulator({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 relative">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3.5 relative">
           {stages.map((stage) => {
             const isCompleted = completedStages.includes(stage.id);
             const isActive = activeStageIndex === stage.id && !isCompleted;
@@ -747,19 +833,19 @@ function LiveDemoSimulator({
             return (
               <motion.div
                 key={stage.id}
-                animate={isActive ? { scale: [1, 1.03, 1] } : {}}
+                animate={isActive ? { scale: [1, 1.02, 1] } : {}}
                 transition={{ duration: 0.6, repeat: isActive ? Infinity : 0 }}
-                className={`p-3 rounded-lg border flex flex-col justify-between transition-all duration-300 relative ${
+                className={`p-4 rounded-xl border flex flex-col justify-between min-h-[105px] transition-all duration-300 relative ${
                   isCompleted
-                    ? "bg-emerald-950/40 border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                    ? "bg-emerald-950/40 border-emerald-500/50 shadow-md shadow-emerald-500/10"
                     : isActive
-                    ? "bg-blue-950/50 border-blue-500 shadow-md shadow-blue-500/20 ring-1 ring-blue-500/50"
-                    : "bg-slate-800/40 border-slate-800 opacity-60"
+                    ? "bg-blue-950/50 border-blue-500 shadow-lg shadow-blue-500/20 ring-1 ring-blue-500/50"
+                    : "bg-slate-900/60 border-slate-800/80 opacity-70"
                 }`}
               >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-white flex items-center gap-1.5 truncate">
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-white flex items-center gap-2 truncate">
+                    <Icon className={`w-4 h-4 shrink-0 ${
                       isCompleted ? "text-emerald-400" : isActive ? "text-blue-400" : "text-slate-500"
                     }`} />
                     <span className="truncate">{stage.short}</span>
@@ -769,7 +855,7 @@ function LiveDemoSimulator({
                       ✓
                     </span>
                   ) : isActive ? (
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping shrink-0" />
                   ) : (
                     <span className="text-[10px] text-slate-600 font-mono font-bold shrink-0">
                       #{stage.id}
@@ -777,7 +863,7 @@ function LiveDemoSimulator({
                   )}
                 </div>
 
-                <p className="text-[10px] text-slate-400 leading-tight">
+                <p className="text-[11px] text-slate-400 leading-snug">
                   {isCompleted && stage.id === 1 && lastResult?.paymentId
                     ? `${lastResult.paymentId.substring(0, 12)}...`
                     : isCompleted && stage.id === 2 && lastResult?.category
@@ -796,16 +882,16 @@ function LiveDemoSimulator({
         </div>
       </div>
 
-      {/* Live Simulation Banner / Quick Recovery Action */}
+      {/* ─── Live Simulation Banner / Quick Recovery Action ─── */}
       {lastResult && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-3.5 rounded-xl bg-slate-900/90 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-inner"
+          className="p-5 rounded-2xl bg-[#08182D]/95 border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-xl"
         >
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-            <span className="font-semibold text-slate-200">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            <span className="font-semibold text-slate-200 text-xs sm:text-sm">
               {lastResult.step === "FULL_FLOW_COMPLETED"
                 ? "🎉 Complete 5-Stage Cycle Executed: Mandate failed → AI drafted → Dispatched → Customer paid → Revenue salvaged!"
                 : lastResult.step === "RECOVERED"
@@ -814,21 +900,21 @@ function LiveDemoSimulator({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
             {lastResult.step === "FAILURE_INGESTED" && onNavigate && (
               <>
                 <button
                   onClick={() => onNavigate("approvals")}
-                  className="px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1 transition-colors"
+                  className="px-4 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  Review in Queue <ArrowRight className="w-3 h-3" />
+                  Review in Queue <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={handleSimulatePaymentPaid}
                   disabled={isPayingLink}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 font-bold border border-emerald-500/30 flex items-center gap-1 transition-colors shadow-sm"
+                  className="px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                 >
-                  <TrendingUp className="w-3 h-3" />
+                  <TrendingUp className="w-3.5 h-3.5" />
                   {isPayingLink ? "Settling..." : "Simulate Customer Payment"}
                 </button>
               </>
@@ -838,15 +924,15 @@ function LiveDemoSimulator({
               <>
                 <button
                   onClick={() => onNavigate("mandates")}
-                  className="px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 font-bold border border-blue-500/30 flex items-center gap-1"
+                  className="px-3.5 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 font-bold border border-blue-500/30 flex items-center gap-1.5 cursor-pointer"
                 >
-                  Failed Mandates <ArrowRight className="w-3 h-3" />
+                  Failed Mandates <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => onNavigate("audit")}
-                  className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold border border-indigo-500/30 flex items-center gap-1"
+                  className="px-3.5 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold border border-indigo-500/30 flex items-center gap-1.5 cursor-pointer"
                 >
-                  Audit Trail <ArrowRight className="w-3 h-3" />
+                  Audit Trail <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </>
             )}
@@ -1388,12 +1474,17 @@ export function DashboardPage({
   onToggleMode,
   refreshTrigger,
   onNavigate,
+  confirmedEmail,
+  onConfirmedEmailChange,
 }: {
   isEnabled: boolean;
   onToggleMode?: () => void;
   refreshTrigger?: number;
   onNavigate?: (tab: string) => void;
+  confirmedEmail?: string | null;
+  onConfirmedEmailChange?: (email: string | null) => void;
 }) {
+  const [includeDemo, setIncludeDemo] = useState(false);
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1401,7 +1492,7 @@ export function DashboardPage({
   const prevRecoveredRef = useRef<number>(0);
 
   const refreshData = () => {
-    fetchDashboardSummary()
+    fetchDashboardSummary(includeDemo)
       .then((res) => {
         if (res && res.paymentsRecovered > prevRecoveredRef.current) {
           setIsRecoveredPulse(true);
@@ -1420,11 +1511,11 @@ export function DashboardPage({
     refreshData();
     const interval = setInterval(refreshData, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [includeDemo]);
 
   useEffect(() => {
     refreshData();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, includeDemo]);
 
   if (loading) return <GlassSkeletons count={4} type="card" />;
   if (error) return <ErrorState message={error} />;
@@ -1464,10 +1555,15 @@ export function DashboardPage({
       <HeroStory />
 
       {/* Live Demo Simulator Bar */}
-      <LiveDemoSimulator onSimulated={refreshData} onNavigate={onNavigate} />
+      <LiveDemoSimulator
+        onSimulated={refreshData}
+        onNavigate={onNavigate}
+        confirmedEmail={confirmedEmail}
+        onConfirmedEmailChange={onConfirmedEmailChange}
+      />
 
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
-        {/* Active Impact Banner */}
+        {/* Active Impact Banner with Data Scope Toggle */}
         <motion.div
           key="active-impact-banner"
           initial={{ opacity: 0, y: 10 }}
@@ -1491,6 +1587,32 @@ export function DashboardPage({
                 Autonomous webhook interception, bank health-aware retry rescheduling, and Gemini multi-channel dunning active.
               </p>
             </div>
+          </div>
+
+          {/* Top-Right Toggle: Live Data Only vs Include Sandbox/Demo */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#02042B] border border-slate-700/80 shrink-0">
+            <button
+              onClick={() => setIncludeDemo(false)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                !includeDemo
+                  ? "bg-[#3395FF] text-white shadow-md shadow-[#3395FF]/20"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>Live Data Only</span>
+            </button>
+            <button
+              onClick={() => setIncludeDemo(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                includeDemo
+                  ? "bg-slate-700 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-purple-300" />
+              <span>Include Sandbox / Demo</span>
+            </button>
           </div>
         </motion.div>
 

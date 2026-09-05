@@ -109,16 +109,21 @@ public class EmailService {
                     : "Action Required: Your Subscription Mandate Payment Failed";
             helper.setSubject(effectiveSubject);
 
+            String sanitizedMessage = com.recovermandate.util.PaymentLinkPlaceholderUtil.replacePlaceholderLinks(messageText, paymentLinkUrl);
+
             String htmlContent = buildBrandedHtmlEmail(
                     customerName,
-                    messageText,
+                    sanitizedMessage,
                     paymentLinkUrl,
                     amountInPaise,
                     currency
             );
 
-            String plainTextContent = (messageText != null ? messageText : "") +
-                    (paymentLinkUrl != null && !paymentLinkUrl.isBlank() ? "\n\nPay via Razorpay Secure Checkout:\n" + paymentLinkUrl : "");
+            boolean isLiveRazorpay = paymentLinkUrl != null && paymentLinkUrl.contains("rzp.io");
+            String plainTextContent = (sanitizedMessage != null ? sanitizedMessage : "");
+            if (paymentLinkUrl != null && !paymentLinkUrl.isBlank() && !plainTextContent.contains(paymentLinkUrl)) {
+                plainTextContent += "\n\n" + (isLiveRazorpay ? "Pay via Razorpay Secure Checkout:" : "Complete Payment via Demo Checkout Page:") + "\n" + paymentLinkUrl;
+            }
 
             helper.setText(plainTextContent, htmlContent);
 
@@ -150,22 +155,40 @@ public class EmailService {
                 ? String.format("%.2f %s", amountInPaise / 100.0, safeCurrency)
                 : "";
 
-        String formattedParagraphs = (messageText != null ? messageText : "")
+        String safeMessage = com.recovermandate.util.PaymentLinkPlaceholderUtil.replacePlaceholderLinks(messageText, paymentLinkUrl);
+
+        // Convert raw URL in body into styled clickable anchor link if present
+        if (paymentLinkUrl != null && !paymentLinkUrl.isBlank() && safeMessage != null && safeMessage.contains(paymentLinkUrl)) {
+            safeMessage = safeMessage.replace(
+                    paymentLinkUrl,
+                    "<a href=\"" + paymentLinkUrl + "\" target=\"_blank\" style=\"color: #3395FF; text-decoration: underline; word-break: break-all;\">" + paymentLinkUrl + "</a>"
+            );
+        }
+
+        String formattedParagraphs = (safeMessage != null ? safeMessage : "")
                 .replace("\n\n", "</p><p style=\"margin: 0 0 16px 0; line-height: 1.6;\">")
                 .replace("\n", "<br/>");
 
         String ctaButtonHtml = "";
         if (paymentLinkUrl != null && !paymentLinkUrl.isBlank()) {
+            boolean isLiveRazorpay = paymentLinkUrl.contains("rzp.io");
+            String buttonLabel = isLiveRazorpay
+                    ? "⚡ Pay Overdue " + formattedAmount + " via Razorpay Secure Checkout"
+                    : "⚡ Complete Payment " + formattedAmount + " (Demo Checkout)";
+            String subLabel = isLiveRazorpay
+                    ? "256-Bit SSL Razorpay Hosted Gateway"
+                    : "RecoverMandate Demo Checkout (Simulated Mode)";
+
             ctaButtonHtml = """
                 <div style="margin: 28px 0; text-align: center;">
                   <a href="%s" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #3395FF 0%%, #1D4ED8 100%%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: bold; padding: 14px 28px; border-radius: 10px; box-shadow: 0 4px 14px rgba(51, 149, 255, 0.4); letter-spacing: 0.3px;">
-                    ⚡ Pay Overdue %s via Razorpay Secure Checkout
+                    %s
                   </a>
-                  <p style="margin-top: 10px; font-size: 11px; color: #64748b; font-family: monospace;">
-                    Link: <a href="%s" style="color: #3395FF; text-decoration: underline;">%s</a>
+                  <p style="margin-top: 8px; font-size: 11px; color: #94a3b8; font-family: monospace;">
+                    %s · <a href="%s" style="color: #3395FF; text-decoration: underline;">Open Link</a>
                   </p>
                 </div>
-            """.formatted(paymentLinkUrl, formattedAmount, paymentLinkUrl, paymentLinkUrl);
+            """.formatted(paymentLinkUrl, buttonLabel, subLabel, paymentLinkUrl);
         }
 
         return """

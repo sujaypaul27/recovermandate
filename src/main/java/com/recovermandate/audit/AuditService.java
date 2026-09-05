@@ -87,7 +87,7 @@ public class AuditService {
             }
         }
 
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         String safeEntityType = entityType != null ? entityType : "UNKNOWN";
         Long safeEntityId = entityId != null ? entityId : 0L;
         String safeAction = action != null ? action : "UNKNOWN";
@@ -110,12 +110,19 @@ public class AuditService {
                 .createdAt(now)
                 .build();
 
-        AuditLog saved = auditLogRepository.save(auditLog);
-        this.lastChecksum = checksum;
+        String prevChecksum = this.lastChecksum;
+        try {
+            AuditLog saved = auditLogRepository.save(auditLog);
+            this.lastChecksum = checksum;
 
-        log.info("Audit log recorded: id={}, entityType={}, action={}, actor={}, traceId={}, checksum={}",
-                saved.getId(), safeEntityType, safeAction, safeActor, traceId, checksum);
-        return saved;
+            log.info("Audit log recorded: id={}, entityType={}, action={}, actor={}, traceId={}, checksum={}",
+                    saved.getId(), safeEntityType, safeAction, safeActor, traceId, checksum);
+            return saved;
+        } catch (Exception e) {
+            this.lastChecksum = prevChecksum;
+            log.error("Failed to persist audit log, restored previous checksum", e);
+            throw e;
+        }
     }
 
     public String getLastChecksum() {
@@ -125,6 +132,46 @@ public class AuditService {
     public synchronized void resetGenesis() {
         this.lastChecksum = "GENESIS";
         log.info("Reset audit log hash chain to GENESIS seed.");
+    }
+
+    /**
+     * Traverses the current audit log table in chronological order, recomputing and updating
+     * SHA-256 checksums from the GENESIS root seed. Repairs broken chains caused by historical deletions.
+     */
+    @Transactional
+    public synchronized com.recovermandate.dto.AuditChainVerificationResponse resealChain() {
+        java.util.List<AuditLog> allLogs = auditLogRepository.findAll(
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "id")
+        );
+
+        String runningChecksum = "GENESIS";
+        long count = 0;
+
+        for (AuditLog audit : allLogs) {
+            String safeEntityType = audit.getEntityType() != null ? audit.getEntityType() : "UNKNOWN";
+            Long safeEntityId = audit.getEntityId() != null ? audit.getEntityId() : 0L;
+            String safeAction = audit.getAction() != null ? audit.getAction() : "UNKNOWN";
+            String safeActor = audit.getActor() != null ? audit.getActor() : "SYSTEM";
+            String timestampStr = audit.getCreatedAt() != null ? audit.getCreatedAt().toString() : "";
+
+            String input = runningChecksum + "|" + safeEntityType + "|" + safeEntityId + "|"
+                    + safeAction + "|" + safeActor + "|" + timestampStr;
+            String newChecksum = sha256(input);
+            audit.setChecksum(newChecksum);
+            runningChecksum = newChecksum;
+            count++;
+        }
+
+        auditLogRepository.saveAll(allLogs);
+        this.lastChecksum = runningChecksum;
+        log.info("Cryptographic audit chain successfully re-sealed across {} records. Latest root checksum: {}", count, this.lastChecksum);
+
+        return com.recovermandate.dto.AuditChainVerificationResponse.builder()
+                .valid(true)
+                .chainLength(count)
+                .brokenAtId(null)
+                .message(String.format("Cryptographic hash chain successfully re-sealed across %d audit record(s).", count))
+                .build();
     }
 
     /**

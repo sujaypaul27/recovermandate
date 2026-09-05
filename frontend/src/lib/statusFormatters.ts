@@ -47,6 +47,11 @@ export const STATUS_MAP: Record<string, StatusInfo> = {
     description: "Customer completed payment or mandate re-authorized successfully",
     badgeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-bold",
   },
+  COMPLETED: {
+    label: "Completed ✅",
+    description: "Cycle completed and mandate resolved via linked settlement",
+    badgeClass: "bg-teal-500/15 text-teal-300 border-teal-500/30 font-bold",
+  },
   AUTO_RECOVERED: {
     label: "Auto-Recovered (Smart Retries) ✅",
     description: "Payment auto-debited successfully during optimal banking window",

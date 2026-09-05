@@ -20,7 +20,7 @@ public class RazorpaySignatureVerifier {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
 
-    @Value("${razorpay.webhook.secret:}")
+    @Value("${razorpay.webhook.secret:${RAZORPAY_WEBHOOK_SECRET:${RAZORPAY_SECRET:}}}")
     private String secret;
 
     public RazorpaySignatureVerifier() {
@@ -28,6 +28,29 @@ public class RazorpaySignatureVerifier {
 
     public RazorpaySignatureVerifier(String secret) {
         this.secret = secret;
+    }
+
+    public String getEffectiveSecret() {
+        if (secret != null && !secret.isBlank()) return secret.trim();
+        String sp1 = System.getProperty("razorpay.webhook.secret");
+        if (sp1 != null && !sp1.isBlank()) return sp1.trim();
+        String sp2 = System.getProperty("RAZORPAY_WEBHOOK_SECRET");
+        if (sp2 != null && !sp2.isBlank()) return sp2.trim();
+
+        String env1 = System.getenv("RAZORPAY_WEBHOOK_SECRET");
+        if (env1 != null && !env1.isBlank()) return env1.trim();
+        String env2 = System.getenv("RAZORPAY_SECRET");
+        if (env2 != null && !env2.isBlank()) return env2.trim();
+        String env3 = System.getenv("razorpay.webhook.secret");
+        if (env3 != null && !env3.isBlank()) return env3.trim();
+        return "";
+    }
+
+    @jakarta.annotation.PostConstruct
+    public void logStartupSecretStatus() {
+        String effective = getEffectiveSecret();
+        boolean isConfigured = !effective.isBlank();
+        log.info("RAZORPAY WEBHOOK SECRET CHECK AT STARTUP: configured={}", isConfigured);
     }
 
     /**
@@ -38,7 +61,7 @@ public class RazorpaySignatureVerifier {
      * @return true if signature is valid, false otherwise
      */
     public boolean verify(String payload, String signature) {
-        return verify(payload, signature, this.secret);
+        return verify(payload, signature, getEffectiveSecret());
     }
 
     /**

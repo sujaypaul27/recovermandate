@@ -55,4 +55,19 @@ class RecoveryActionValidationServiceTest {
         assertTrue(blockReason.isPresent());
         assertTrue(blockReason.get().contains("aggressive or threatening language: final notice"));
     }
+
+    @Test
+    void testDraftWithValidRupeeSymbol() {
+        String draft = "Your payment of ₹100.50 failed. Please update your payment method.";
+        Optional<String> blockReason = validationService.validateDraft(draft, 10050L);
+        assertTrue(blockReason.isEmpty(), "Draft with correct rupee symbol should be valid");
+    }
+
+    @Test
+    void testDraftWithWrongRupeeSymbol() {
+        String draft = "Your payment of ₹250.00 failed.";
+        Optional<String> blockReason = validationService.validateDraft(draft, 10050L);
+        assertTrue(blockReason.isPresent(), "Draft with incorrect rupee amount should be blocked");
+        assertTrue(blockReason.get().contains("incorrect monetary amount"));
+    }
 }

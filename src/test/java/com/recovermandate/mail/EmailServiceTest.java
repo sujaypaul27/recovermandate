@@ -112,20 +112,32 @@ class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("Should return failed result if recipient email is empty or null")
-    void sendRecoveryEmail_emptyRecipient_returnsFailed() {
+    @DisplayName("Should substitute localhost placeholder links in email message body with the live paymentLinkUrl")
+    void sendRecoveryEmail_substitutesPlaceholderWithRealRazorpayLink() {
+        ReflectionTestUtils.setField(emailService, "mailUsername", "billing@gmail.com");
+        ReflectionTestUtils.setField(emailService, "mailPassword", "app-password-1234");
+        ReflectionTestUtils.setField(emailService, "mailHost", "smtp.gmail.com");
+        ReflectionTestUtils.setField(emailService, "mailPort", 587);
+        ReflectionTestUtils.setField(emailService, "mailEnabled", true);
+
+        MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
+        String messageWithPlaceholder = "Dear Customer,\n\nYour payment failed. Retry here: http://localhost:5173/#pay/plink_preview_act_32\n\nThank you.";
+        String liveRazorpayUrl = "https://rzp.io/rzp/liveLink999";
+
         EmailSendResult result = emailService.sendRecoveryEmail(
-                "",
+                "customer@example.com",
                 "Jane Doe",
-                "Action Required",
-                "Payment failed",
-                "https://rzp.io/l/preview",
+                "Action Required: Pay Overdue",
+                messageWithPlaceholder,
+                liveRazorpayUrl,
                 49900L,
                 "INR"
         );
 
         assertNotNull(result);
-        assertTrue(result.isFailed());
-        assertEquals("Missing recipient email address", result.getErrorMessage());
+        assertTrue(result.isRealSent());
+        verify(mailSender).send(mimeMessage);
     }
 }

@@ -45,6 +45,15 @@ public class RetrySchedulerService {
             return Collections.emptyList();
         }
 
+        if (event.getId() != null) {
+            List<RetrySchedule> existing = retryScheduleRepository.findByPaymentEventIdOrderByAttemptNumberAsc(event.getId());
+            if (existing != null && !existing.isEmpty()) {
+                log.info("Retries already scheduled for event id={} (found {} existing schedules). Skipping duplicate scheduling.",
+                        event.getId(), existing.size());
+                return existing;
+            }
+        }
+
         String category = classification.getCategory() != null ? classification.getCategory() : "unknown";
         int totalAttempts = getAttemptCount(category);
 
@@ -69,6 +78,7 @@ public class RetrySchedulerService {
                     .scheduleReason(window.reason())
                     .result("PENDING")
                     .createdAt(now)
+                    .isDemoData(event.isDemoData())
                     .build();
 
             schedules.add(retryScheduleRepository.save(schedule));

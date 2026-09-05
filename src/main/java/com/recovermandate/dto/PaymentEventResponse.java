@@ -39,4 +39,8 @@ public class PaymentEventResponse {
     private Long recoveryActionId;
     private String paymentLinkId;
     private String paymentLinkUrl;
+
+    // Data Source & Unified Recovery Status
+    private Boolean isDemoData;
+    private String recoveryStatus; // "RECOVERED" vs "IN_PROGRESS"
 }

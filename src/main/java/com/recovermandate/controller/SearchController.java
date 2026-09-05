@@ -16,6 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Controller providing unified full-text and prefix search across payment events
+ * and audit log entries for operational triage.
+ */
 @RestController
 @RequestMapping("/api/search")
 @RequiredArgsConstructor

@@ -18,6 +18,7 @@ import com.recovermandate.service.MerchantSettingsService;
 import com.recovermandate.service.SseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +50,9 @@ public class CheckoutController {
     private final MerchantSettingsService merchantSettingsService;
     private final AuditService auditService;
     private final SseService sseService;
+
+    @Value("${recovermandate.app-url:http://localhost:5173}")
+    private String appUrl;
 
     @GetMapping("/{linkId}")
     public ResponseEntity<CheckoutDetailsDto> getCheckoutDetails(@PathVariable String linkId) {
@@ -125,6 +129,17 @@ public class CheckoutController {
         PaymentLink link = resolvePaymentLink(linkId);
         if (link == null) {
             return ResponseEntity.notFound().build();
+        }
+
+        if ("PAID".equalsIgnoreCase(link.getStatus())) {
+            log.info("Payment link {} is already marked as PAID, returning existing settled receipt", linkId);
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "paymentId", "pay_already_captured",
+                    "message", "Payment has already been captured and mandate restored.",
+                    "amount", link.getAmount() != null ? link.getAmount() : 49900L,
+                    "paidAt", link.getPaidAt() != null ? link.getPaidAt().toString() : Instant.now().toString()
+            ));
         }
 
         String simulatedPaymentId = "pay_cust_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
@@ -216,9 +231,11 @@ public class CheckoutController {
         }
 
         // Support preview-stage link resolution for draft review in demo/test environments
-        if (cleanId.startsWith("plink_preview_act_")) {
+        if (cleanId.startsWith("plink_preview_act_") || cleanId.startsWith("demo_")) {
             try {
-                String idStr = cleanId.substring("plink_preview_act_".length());
+                String idStr = cleanId.startsWith("demo_")
+                        ? cleanId.substring("demo_".length())
+                        : cleanId.substring("plink_preview_act_".length());
                 Long actionId = Long.parseLong(idStr);
                 Optional<RecoveryAction> actionOpt = recoveryActionRepository.findById(actionId);
                 if (actionOpt.isPresent()) {
@@ -232,21 +249,53 @@ public class CheckoutController {
                             ? act.getFailureClassification().getPaymentEvent()
                             : null;
                     Long amount = (evt != null && evt.getAmount() != null) ? evt.getAmount() : 49900L;
+                    String cleanAppUrl = (appUrl != null && !appUrl.isBlank()) ? appUrl.replaceAll("/+$", "") : "http://localhost:5173";
 
                     PaymentLink previewLink = PaymentLink.builder()
                             .recoveryAction(act)
                             .razorpayLinkId(cleanId)
-                            .shortUrl("https://rzp.io/l/" + cleanId)
+                            .shortUrl(cleanAppUrl + "/#/pay/" + cleanId)
                             .amount(amount)
                             .currency("INR")
                             .status("CREATED")
                             .expireBy(Instant.now().plusSeconds(48 * 3600))
                             .createdAt(Instant.now())
+                            .isDemoData(true)
                             .build();
                     return paymentLinkRepository.save(previewLink);
                 }
             } catch (Exception e) {
                 log.warn("Failed to dynamically provision preview payment link for id={}: {}", cleanId, e.getMessage());
+            }
+        }
+
+        // Support fallback demo quota links for presentation/checkout sandbox
+        if (cleanId.startsWith("demo_") || cleanId.startsWith("plink_quota_") || cleanId.startsWith("plink_sim_")) {
+            try {
+                List<RecoveryAction> recentActions = recoveryActionRepository.findAll(
+                        org.springframework.data.domain.PageRequest.of(0, 1,
+                                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "id"))
+                ).getContent();
+                RecoveryAction act = recentActions.isEmpty() ? null : recentActions.get(0);
+                PaymentEvent evt = (act != null && act.getFailureClassification() != null)
+                        ? act.getFailureClassification().getPaymentEvent()
+                        : null;
+                Long amount = (evt != null && evt.getAmount() != null) ? evt.getAmount() : 49900L;
+                String cleanAppUrl = (appUrl != null && !appUrl.isBlank()) ? appUrl.replaceAll("/+$", "") : "http://localhost:5173";
+
+                PaymentLink fallbackLink = PaymentLink.builder()
+                        .recoveryAction(act)
+                        .razorpayLinkId(cleanId)
+                        .shortUrl(cleanAppUrl + "/#/pay/" + cleanId)
+                        .amount(amount)
+                        .currency("INR")
+                        .status("CREATED")
+                        .expireBy(Instant.now().plusSeconds(48 * 3600))
+                        .createdAt(Instant.now())
+                        .build();
+                return paymentLinkRepository.save(fallbackLink);
+            } catch (Exception e) {
+                log.warn("Failed to dynamically provision demo quota payment link for id={}: {}", cleanId, e.getMessage());
             }
         }
 

@@ -63,4 +63,8 @@ public class PaymentLink {
 
     @Column(name = "paid_at")
     private Instant paidAt;
+
+    @Column(name = "is_demo_data", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean isDemoData = false;
 }

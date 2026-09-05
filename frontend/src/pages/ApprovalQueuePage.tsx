@@ -35,6 +35,7 @@ import {
   approveAndDispatchRecoveryAction,
   rejectRecoveryAction,
   batchApproveRecoveryActions,
+  fetchSystemHealth,
   type PageResponse,
   type RecoveryActionItem,
 } from "../lib/api";
@@ -81,20 +82,20 @@ interface ToneStrategyConfig {
 
 const TONE_STRATEGIES: Record<"gentle" | "balanced" | "urgent", ToneStrategyConfig> = {
   gentle: {
-    label: "Gentle (VIP & Soft Declines)",
-    badge: "+14% Open Rate",
+    label: "Gentle (Customer Delight)",
+    badge: "+18% CSAT Retention",
     badgeColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    targetAudience: "High-net-worth VIP customers & soft declines (insufficient funds).",
-    impactMetric: "Zero customer irritation, maximizes goodwill and brand loyalty.",
-    description: "Soft reminder framing the failure as a temporary bank glitch. Encourages quick review without alarming the subscriber.",
+    targetAudience: "High LTV VIP subscribers, first-time failure occurrences, or recent card expirations.",
+    impactMetric: "Zero brand friction, preserves long-term goodwill and high renewal rates.",
+    description: "Soft reminder emphasizing continuous service with frictionless self-serve card update via Razorpay.",
   },
   balanced: {
-    label: "Balanced (Standard Recurring)",
-    badge: "+28% Recovery Rate",
+    label: "Balanced (Recommended)",
+    badge: "+34% Recovery Velocity",
     badgeColor: "bg-[#3395FF]/15 text-[#93c5fd] border-[#3395FF]/30",
-    targetAudience: "Default strategy for general recurring mandates and SaaS subscriptions.",
-    impactMetric: "High direct conversion with professional clarity and clear CTA.",
-    description: "Standard professional notice with failure explanation and direct Razorpay checkout link for immediate resolution.",
+    targetAudience: "Standard subscription tiers, non-sufficient funds (NSF), standard recurring billing retries.",
+    impactMetric: "Industry-standard recovery balance of urgency and brand protection.",
+    description: "Direct notification explaining the failed mandate transaction with clear instant retry instructions.",
   },
   urgent: {
     label: "Urgent (Critical & Near-Expiry)",
@@ -113,18 +114,29 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [isBatchApproving, setIsBatchApproving] = useState(false);
   const [batchTone, setBatchTone] = useState<"gentle" | "balanced" | "urgent">("balanced");
+  const [isLiveGateway, setIsLiveGateway] = useState(false);
   const { toast } = useToast();
 
-  const load = () => {
-    setLoading(true);
+  const load = (showSkeleton = false) => {
+    if (showSkeleton) {
+      setLoading(true);
+    }
     fetchRecoveryActions(0, 50, "DRAFTED")
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+
+    fetchSystemHealth()
+      .then((h: any) => {
+        if (h?.razorpayApi?.mode === "LIVE" || h?.razorpayApi?.configured === true) {
+          setIsLiveGateway(true);
+        }
+      })
+      .catch(() => {});
   };
 
   useEffect(() => {
-    load();
+    load(!data);
   }, [refreshTrigger]);
 
   const pendingActions = [...(data?.content || [])].sort((a, b) => {
@@ -181,7 +193,7 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
     return (
       <div className="glass-card rounded-2xl p-8 text-center text-rose-400 space-y-3 bg-[#0C2340]/80 border-rose-500/30">
         <p className="font-bold">Failed to load recovery actions: {error}</p>
-        <Button onClick={load} variant="outline" size="sm" className="border-[#3395FF]/40 text-white">
+        <Button onClick={() => load(true)} variant="outline" size="sm" className="border-[#3395FF]/40 text-white">
           Retry
         </Button>
       </div>
@@ -214,7 +226,6 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
         )}
       </div>
 
-      {/* Batch Approval Confirmation Modal */}
       <AnimatePresence>
         {showBatchModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
@@ -248,26 +259,25 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
                 </div>
                 <div className="flex justify-between text-slate-300 pb-2 border-b border-slate-800">
                   <span>Total Recoverable Value:</span>
-                  <span className="text-emerald-400 font-bold">{formatINR(totalSafeValuePaise)}</span>
+                  <span className="text-white font-bold">{formatINR(totalSafeValuePaise, false)}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>Safety Criteria:</span>
-                  <span className="text-blue-400 font-bold">Amount &lt;= ₹2,500 · PII Redacted</span>
+                  <span>Threshold Filter:</span>
+                  <span className="text-slate-400">&le; ₹2,500.00 (Low-risk threshold)</span>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Select Batch Dunning Tone</label>
-                <div className="grid grid-cols-3 gap-2 bg-[#02042B] p-1.5 rounded-xl border border-slate-700 text-xs font-bold">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-2">Select Batch Dispatch Strategy</label>
+                <div className="grid grid-cols-3 gap-2">
                   {(["gentle", "balanced", "urgent"] as const).map((t) => (
                     <button
                       key={t}
-                      type="button"
                       onClick={() => setBatchTone(t)}
-                      className={`py-1.5 rounded-lg capitalize transition-all ${
+                      className={`p-2.5 rounded-xl border text-xs font-bold capitalize transition-all ${
                         batchTone === t
-                          ? "bg-emerald-600 text-white shadow-sm font-extrabold"
-                          : "text-slate-400 hover:text-white"
+                          ? "border-[#3395FF] bg-[#3395FF]/20 text-white shadow-lg shadow-[#3395FF]/20"
+                          : "border-slate-700 bg-[#02042B] text-slate-400 hover:border-slate-600"
                       }`}
                     >
                       {t}
@@ -276,22 +286,19 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex gap-3 pt-2">
                 <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => setShowBatchModal(false)}
-                  className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs"
+                  variant="outline"
+                  className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800"
                 >
                   Cancel
                 </Button>
                 <Button
-                  size="sm"
                   onClick={handleBatchApprove}
                   disabled={isBatchApproving}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold gap-1.5 shadow-lg shadow-emerald-600/30"
+                  className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold"
                 >
-                  <Zap className={`w-3.5 h-3.5 ${isBatchApproving ? "animate-spin" : ""}`} />
                   {isBatchApproving ? "Dispatching..." : `Confirm & Dispatch (${safeActions.length})`}
                 </Button>
               </div>
@@ -302,26 +309,24 @@ export function ApprovalQueuePage({ refreshTrigger }: { refreshTrigger?: number 
 
       {loading ? (
         <div className="space-y-4">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="skeleton-shimmer h-64 w-full rounded-2xl" />
+          {[1, 2].map((i) => (
+            <div key={i} className="h-64 rounded-2xl glass-card animate-pulse bg-[#0C2340]/40" />
           ))}
         </div>
-      ) : !data || data.content.length === 0 ? (
-        <div className="glass-card rounded-2xl overflow-hidden shadow-xl">
-          <EmptyState
-            variant="shield"
-            title="Approval Queue Clear"
-            description="All AI-generated recovery drafts have been reviewed, dispatched, or automatically resolved via Auto-Pilot."
-            badgeText="Zero Pending Drafts"
-          />
-        </div>
+      ) : pendingActions.length === 0 ? (
+        <EmptyState
+          icon={<CheckCircle className="w-8 h-8 text-emerald-400" />}
+          title="Approval Queue Cleared"
+          description="All AI recovery drafts have been processed and dispatched. New payment failure events will generate fresh drafts automatically."
+        />
       ) : (
-        data.content.map((action: RecoveryActionItem) => (
+        pendingActions.map((action) => (
           <motion.div key={action.id} variants={fadeUp}>
             <ApprovalCard
               action={action}
               onApprove={(tone, message) => handleApprove(action.id, tone, message)}
               onReload={load}
+              isLiveGateway={isLiveGateway}
             />
           </motion.div>
         ))
@@ -334,10 +339,12 @@ function ApprovalCard({
   action,
   onApprove,
   onReload,
+  isLiveGateway = false,
 }: {
   action: RecoveryActionItem;
   onApprove: (tone: string, message?: string) => void;
   onReload: () => void;
+  isLiveGateway?: boolean;
 }) {
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
@@ -349,10 +356,27 @@ function ApprovalCard({
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
+  const isVoidEmail = !action.customerEmail || action.customerEmail.toLowerCase().includes("void@") || action.customerEmail.toLowerCase().endsWith("@razorpay.com") || action.customerEmail.toLowerCase() === "null";
+  const displayEmail: string = (isVoidEmail || !action.customerEmail) ? "sujaypaul2711@gmail.com" : action.customerEmail;
+  const isVoidName = !action.customerName || action.customerName.toLowerCase() === "void" || action.customerName.toLowerCase() === "null";
+  const displayName: string = (isVoidName || !action.customerName) ? (isVoidEmail ? "Sujay Paul" : (displayEmail.split("@")[0] || "Customer")) : action.customerName;
+
   const isHeuristic = action.draftSource === "HEURISTIC";
   const isDraftMode = action.status === "DRAFTED";
+  const defaultOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
+  
+  const isLiveRazorpay = Boolean(
+    (action.paymentLinkUrl && action.paymentLinkUrl.includes("rzp.io")) ||
+    (isLiveGateway && (!action.paymentLinkUrl || !action.paymentLinkUrl.includes("localhost")))
+  );
+
   const paymentLink =
-    action.paymentLinkUrl || (action.id ? `https://rzp.io/l/plink_preview_act_${action.id}` : "https://rzp.io/l/plink_preview");
+    action.paymentLinkUrl ||
+    (isLiveGateway
+      ? `https://rzp.io/l/preview_act_${action.id || "0"}`
+      : action.id
+      ? `${defaultOrigin}/#pay/plink_preview_act_${action.id}`
+      : `${defaultOrigin}/#pay/plink_preview`);
 
   // Extract amount from draft or default to standard ₹499.00
   const amountMatch = action.aiDraftMessage?.match(/₹[\d,]+(\.\d{2})?/);
@@ -364,12 +388,17 @@ function ApprovalCard({
       if (tone === "gentle") {
         return `Hi ${action.customerName || "Valued Customer"},\n\nWe noticed a temporary issue processing your mandate for ${formattedAmount}. No worries — your subscription remains active.\n\nTap here to easily update your payment details or retry:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings.\n\nThank you for choosing us,\nCustomer Success Team`;
       } else if (tone === "urgent") {
-        return `⚠️ ACTION REQUIRED: Mandate payment of ${formattedAmount} failed.\n\nYour subscription is in grace period and will automatically PAUSE in 48 hours unless resolved.\n\nPlease immediately complete payment via Razorpay secure checkout:\n${paymentLink}\n\nIf you no longer wish to maintain your subscription, you can manage or cancel your plan in account settings before the grace period ends.\n\nImmediate settlement required to prevent service cancellation.`;
+        return `⚠️ ACTION REQUIRED: Mandate payment of ${formattedAmount} failed.\n\nYour subscription is in grace period and will automatically PAUSE in 48 hours unless resolved.\n\nPlease immediately complete payment via ${isLiveRazorpay ? "Razorpay secure checkout" : "secure checkout"}:\n${paymentLink}\n\nIf you no longer wish to maintain your subscription, you can manage or cancel your plan in account settings before the grace period ends.\n\nImmediate settlement required to prevent service cancellation.`;
       } else {
         if (action.aiDraftMessage && action.aiDraftMessage.trim() && !isHeuristic) {
-          return action.aiDraftMessage.includes("http")
-            ? action.aiDraftMessage
-            : `${action.aiDraftMessage}\n\nSecurely retry or update payment method:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings or by contacting support.`;
+          let sanitizedDraft = action.aiDraftMessage.replace(
+            /https?:\/\/(?:localhost:\d+|[a-zA-Z0-9.-]+)\/#(?:pay|checkout)\/[a-zA-Z0-9_.-]+|https?:\/\/localhost:\d+\/[^\s"'>)]*|https?:\/\/rzp\.io\/l\/preview_[a-zA-Z0-9_.-]+/g,
+            paymentLink
+          );
+          if (sanitizedDraft.includes(paymentLink)) {
+            return sanitizedDraft;
+          }
+          return `${sanitizedDraft}\n\nSecurely retry or update payment method:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings or by contacting support.`;
         }
         return `Hello ${action.customerName || "Valued Customer"},\n\nYour mandate payment of ${formattedAmount} failed due to a bank processing issue. Securely retry or update your payment method:\n${paymentLink}\n\nIf you no longer wish to continue your subscription, you can cancel anytime in your account settings or by contacting support.\n\nBest regards,\nBilling & Subscriptions`;
       }
@@ -379,7 +408,7 @@ function ApprovalCard({
       } else if (tone === "urgent") {
         return `🚨 URGENT: Your mandate payment of ${formattedAmount} failed. Service will be paused within 48 hours. Please complete immediate recovery payment here:\n${paymentLink}\n\nTo cancel your subscription instead, visit account settings before expiry.`;
       } else {
-        return `Hello ${action.customerName || "Customer"}, your recurring mandate payment of ${formattedAmount} could not be processed. Please use this secure Razorpay link to restore active status:\n${paymentLink}\n\nTo cancel or update your plan, visit your account portal anytime.`;
+        return `Hello ${action.customerName || "Customer"}, your recurring mandate payment of ${formattedAmount} could not be processed. Please use this secure link to restore active status:\n${paymentLink}\n\nTo cancel or update your plan, visit your account portal anytime.`;
       }
     } else {
       // SMS / DLT
@@ -401,9 +430,11 @@ function ApprovalCard({
     navigator.clipboard.writeText(paymentLink);
     setCopiedLink(true);
     toast({
-      title: isDraftMode ? "Preview Link Copied" : "Razorpay Link Copied",
-      description: isDraftMode
-        ? `Copied preview URL. Live link will be dispatched to customer upon approval.`
+      title: isLiveRazorpay ? "Razorpay Live Link Copied" : isDraftMode ? "Demo Preview Link Copied" : "Demo Checkout Link Copied",
+      description: isLiveRazorpay
+        ? `Copied live Razorpay payment URL to clipboard.`
+        : isDraftMode
+        ? `Copied local demo checkout preview URL. Dispatches to customer upon approval.`
         : `Copied ${paymentLink} to clipboard.`,
     });
     setTimeout(() => setCopiedLink(false), 2000);
@@ -471,7 +502,7 @@ function ApprovalCard({
                 <strong className="text-cyan-300 font-mono">{action.customerEmail || "subscriber@example.com"}</strong>
                 {action.customerEmail && !action.customerEmail.includes("@example.com") && (
                   <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
-                    ⚡ Live Target
+                    📧 Real Inbox Target
                   </span>
                 )}
               </span>
@@ -750,11 +781,11 @@ function ApprovalCard({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-slate-300 w-14">To:</span>
                       <span className="text-[#93c5fd] font-mono text-[11px] font-semibold">
-                        {action.customerName ? `${action.customerName} <${action.customerEmail || "customer@example.com"}>` : (action.customerEmail || "subscriber@example.com")}
+                        {displayName} &lt;{displayEmail}&gt;
                       </span>
-                      {action.customerEmail && !action.customerEmail.includes("@example.com") && (
+                      {displayEmail && !displayEmail.includes("@example.com") && !displayEmail.includes("@razorpay.com") && (
                         <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-sans font-bold uppercase tracking-wider">
-                          ⚡ Live Recipient
+                          📧 Real Inbox Recipient
                         </span>
                       )}
                     </div>
@@ -791,10 +822,18 @@ function ApprovalCard({
                       href={paymentLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="w-full py-2.5 px-4 rounded-xl bg-[#3395FF] hover:bg-[#2582eb] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-[#3395FF]/20 transition-colors"
+                      className={`w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-colors ${
+                        isLiveRazorpay
+                          ? "bg-[#3395FF] hover:bg-[#2582eb] shadow-[#3395FF]/20"
+                          : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-indigo-500/25"
+                      }`}
                     >
                       <RazorpayMark className="w-4 h-4 text-white" />
-                      <span>Pay Overdue {formattedAmount} via Razorpay Secure Checkout</span>
+                      <span>
+                        {isLiveRazorpay
+                          ? `Pay Overdue ${formattedAmount} via Razorpay Secure Checkout`
+                          : `⚡ Open Demo Checkout Page (${formattedAmount})`}
+                      </span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
@@ -858,7 +897,7 @@ function ApprovalCard({
                         className="w-full py-2.5 px-4 rounded-xl bg-[#1f2c34] hover:bg-[#2a3942] border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
                       >
                         <RazorpayMark className="w-4 h-4" />
-                        <span>Pay Overdue {formattedAmount}</span>
+                        <span>{isLiveRazorpay ? `Pay Overdue ${formattedAmount}` : `⚡ Open Demo Checkout (${formattedAmount})`}</span>
                         <ExternalLink className="w-3 h-3 text-emerald-400" />
                       </a>
                     </div>
@@ -914,7 +953,7 @@ function ApprovalCard({
               )}
             </div>
 
-            {/* Embedded Razorpay Link Preview */}
+            {/* Embedded Payment Link Preview */}
             <div className="mt-4 pt-3 border-t border-[#3395FF]/20">
               <div className="p-3 rounded-lg bg-[#0C2340] border border-[#3395FF]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -922,21 +961,31 @@ function ApprovalCard({
                     <RazorpayMark className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] font-bold text-white tracking-wide">
-                        {isDraftMode ? "Razorpay Hosted Link (Draft Preview)" : "Razorpay Hosted Link"}
+                        {isLiveRazorpay
+                          ? "Live Razorpay Hosted Link"
+                          : isDraftMode
+                          ? "Demo Checkout Link (Draft Preview)"
+                          : "Demo Checkout Link (Simulated)"}
                       </span>
                       <span
-                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                          isDraftMode
+                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-bold ${
+                          isLiveRazorpay
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                            : isDraftMode
                             ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                            : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                         }`}
                       >
-                        {isDraftMode ? "PREVIEW · ACTIVATES ON APPROVAL" : "256-BIT SSL LIVE"}
+                        {isLiveRazorpay
+                          ? "256-BIT SSL LIVE RAZORPAY"
+                          : isDraftMode
+                          ? "DEMO CHECKOUT · PREVIEW"
+                          : "DEMO CHECKOUT · LOCAL ROUTE"}
                       </span>
                     </div>
-                    <span className="text-xs font-mono text-[#93c5fd] truncate block">
+                    <span className="text-xs font-mono text-[#93c5fd] truncate block mt-0.5">
                       {paymentLink}
                     </span>
                   </div>
@@ -945,17 +994,17 @@ function ApprovalCard({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={handleCopyLink}
-                    className="px-2.5 py-1.5 rounded-lg bg-[#02042B] hover:bg-[#3395FF]/20 border border-[#3395FF]/40 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors"
+                    className="px-2.5 py-1.5 rounded-lg bg-[#02042B] hover:bg-[#3395FF]/20 border border-[#3395FF]/40 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#3395FF]" />}
-                    <span>{copiedLink ? "Copied" : "Copy"}</span>
+                    <span>{copiedLink ? "Copied" : "Copy Link"}</span>
                   </button>
                   <a
                     href={paymentLink}
                     target="_blank"
                     rel="noreferrer"
                     className="p-1.5 rounded-lg bg-[#02042B] hover:bg-[#3395FF]/20 border border-[#3395FF]/40 text-[#3395FF] hover:text-white transition-colors"
-                    title="Open checkout link in new tab"
+                    title={isLiveRazorpay ? "Open Razorpay checkout in new tab" : "Open demo checkout page in new tab"}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>

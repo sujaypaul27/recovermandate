@@ -32,4 +32,5 @@ public class RecoveryActionResponse {
     private Long amount;
     private String customerEmail;
     private String customerName;
+    private Boolean isDemoData;
 }

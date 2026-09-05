@@ -58,7 +58,6 @@ class AuditServiceTest {
     }
 
     @Test
-    @DisplayName("Should chain checksums sequentially across multiple log entries")
     void log_sequentialCalls_chainsChecksums() {
         AuditLog log1 = auditService.log("PAYMENT_EVENT", 1L, "ACTION_1", "SYSTEM", "First entry");
         String checksum1 = log1.getChecksum();
@@ -151,5 +150,29 @@ class AuditServiceTest {
         assertFalse(result.isValid());
         assertEquals(1L, result.getChainLength()); // 1 entry verified before failure
         assertEquals(log2.getId(), result.getBrokenAtId());
+    }
+
+    @Test
+    @DisplayName("Should re-seal tampered audit chain and restore valid cryptographic integrity")
+    void resealChain_repairsBrokenChain() {
+        AuditLog log1 = auditService.log("PAYMENT_EVENT", 1L, "ACTION_1", "SYSTEM", "First entry");
+        AuditLog log2 = auditService.log("RECOVERY_ACTION", 2L, "ACTION_2", "HUMAN", "Second entry");
+
+        // Tamper with log2's checksum
+        log2.setChecksum("corrupted_or_deleted_prior_records_checksum");
+
+        when(auditLogRepository.findAll(any(org.springframework.data.domain.Sort.class)))
+                .thenReturn(java.util.List.of(log1, log2));
+
+        com.recovermandate.dto.AuditChainVerificationResponse verifyBefore = auditService.verifyChain();
+        assertFalse(verifyBefore.isValid());
+
+        com.recovermandate.dto.AuditChainVerificationResponse resealRes = auditService.resealChain();
+        assertTrue(resealRes.isValid());
+        assertEquals(2L, resealRes.getChainLength());
+        assertNull(resealRes.getBrokenAtId());
+
+        com.recovermandate.dto.AuditChainVerificationResponse verifyAfter = auditService.verifyChain();
+        assertTrue(verifyAfter.isValid());
     }
 }

@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 
+/**
+ * Controller providing query and verification endpoints for the cryptographic SHA-256
+ * tamper-evident audit ledger.
+ */
 @RestController
 @RequestMapping("/api/audit-log")
 @RequiredArgsConstructor
@@ -48,5 +52,10 @@ public class AuditLogController {
     @GetMapping("/verify-chain")
     public AuditChainVerificationResponse verifyChain() {
         return auditService.verifyChain();
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/reseal-chain")
+    public AuditChainVerificationResponse resealChain() {
+        return auditService.resealChain();
     }
 }

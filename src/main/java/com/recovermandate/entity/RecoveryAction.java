@@ -61,6 +61,10 @@ public class RecoveryAction {
     @Column(nullable = false)
     private String actor;
 
+    @Column(name = "is_demo_data", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean isDemoData = false;
+
     @jakarta.persistence.Version
     @Column(name = "version", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     @Builder.Default

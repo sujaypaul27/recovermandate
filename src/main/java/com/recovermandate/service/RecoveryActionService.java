@@ -21,6 +21,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Orchestrator service for the recovery action lifecycle:
+ * <ol>
+ *   <li><b>AI Drafting:</b> Invokes {@link GeminiClient} (with fallback to {@link com.recovermandate.ai.HeuristicFallbackEngine})
+ *       to draft customized dunning emails.</li>
+ *   <li><b>Deterministic Safety Validation:</b> Screens generated text via {@link RecoveryActionValidationService}
+ *       for unauthorized promises, aggressive tone, or amount mismatches. Transitions invalid drafts to {@code BLOCKED}.</li>
+ *   <li><b>Human Approval Queue:</b> Routes high-value drafts or manual interventions to the operator approval queue.</li>
+ *   <li><b>Payment Link Creation:</b> Invokes {@link PaymentLinkService} to generate hosted Razorpay recovery links.</li>
+ * </ol>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -121,6 +132,7 @@ public class RecoveryActionService {
                 .status(status)
                 .createdAt(Instant.now())
                 .actor("SYSTEM")
+                .isDemoData(event != null && event.isDemoData())
                 .build();
 
         RecoveryAction savedAction = recoveryActionRepository.save(action);
@@ -233,10 +245,54 @@ public class RecoveryActionService {
     }
 
     private Customer extractCustomer(PaymentEvent event) {
-        if (event != null && event.getSubscription() != null) {
-            return event.getSubscription().getCustomer();
+        if (event != null && event.getSubscription() != null && event.getSubscription().getCustomer() != null) {
+            Customer c = event.getSubscription().getCustomer();
+            if (c.getEmail() != null && !c.getEmail().isBlank() && !WebhookService.isPlaceholderOrVoidEmail(c.getEmail())) {
+                String safeName = (c.getName() != null && !c.getName().isBlank() && !"Void".equalsIgnoreCase(c.getName())) ? c.getName() : "Rsiv ece2024";
+                return Customer.builder()
+                        .id(c.getId())
+                        .name(safeName)
+                        .email(c.getEmail())
+                        .razorpayCustomerId(c.getRazorpayCustomerId())
+                        .merchant(c.getMerchant())
+                        .build();
+            }
         }
-        return null;
+        if (event != null && event.getRawPayload() != null && !event.getRawPayload().isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(event.getRawPayload());
+                com.fasterxml.jackson.databind.JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
+                com.fasterxml.jackson.databind.JsonNode subscriptionEntity = root.path("payload").path("subscription").path("entity");
+                String email = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+                if (email != null && !WebhookService.isPlaceholderOrVoidEmail(email)) {
+                    String name = WebhookService.extractCustomerName(root, paymentEntity, subscriptionEntity, email);
+                    return Customer.builder()
+                            .name(name != null && !"Void".equalsIgnoreCase(name) ? name : "Rsiv ece2024")
+                            .email(email)
+                            .razorpayCustomerId(WebhookService.extractCustomerId(root, paymentEntity, subscriptionEntity, email, event.getRazorpayPaymentId()))
+                            .build();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        
+        // If customer record exists but has void email or is blank, provide safe fallback
+        if (event != null && event.getSubscription() != null && event.getSubscription().getCustomer() != null) {
+            Customer c = event.getSubscription().getCustomer();
+            String safeName = (c.getName() != null && !c.getName().isBlank() && !"Void".equalsIgnoreCase(c.getName())) ? c.getName() : "Sujay Paul";
+            return Customer.builder()
+                    .id(c.getId())
+                    .name(safeName)
+                    .email("sujaypaul2711@gmail.com")
+                    .razorpayCustomerId(c.getRazorpayCustomerId())
+                    .merchant(c.getMerchant())
+                    .build();
+        }
+        return Customer.builder()
+                .name("Sujay Paul")
+                .email("sujaypaul2711@gmail.com")
+                .build();
     }
     
     @Transactional
@@ -292,12 +348,20 @@ public class RecoveryActionService {
             action.setTone(tone.toLowerCase(java.util.Locale.ROOT));
         }
 
-        if (customMessage != null && !customMessage.isBlank()) {
-            action.setAiDraftMessage(customMessage);
-        }
-
         PaymentLink paymentLink = paymentLinkService.createLinkForRecoveryAction(action);
-        dispatchService.dispatchRecovery(action, paymentLink.getShortUrl());
+        String realLinkUrl = paymentLink.getShortUrl();
+        action.setPaymentLinkUrl(realLinkUrl);
+
+        String messageToUse = (customMessage != null && !customMessage.isBlank())
+                ? customMessage
+                : action.getAiDraftMessage();
+
+        if (messageToUse != null && realLinkUrl != null && !realLinkUrl.isBlank()) {
+            messageToUse = com.recovermandate.util.PaymentLinkPlaceholderUtil.replacePlaceholderLinks(messageToUse, realLinkUrl);
+        }
+        action.setAiDraftMessage(messageToUse);
+
+        dispatchService.dispatchRecovery(action, realLinkUrl);
 
         action.setStatus("DISPATCHED");
         action.setSentAt(Instant.now());
@@ -338,6 +402,12 @@ public class RecoveryActionService {
         action.setStatus("REJECTED");
         recoveryActionRepository.save(action);
 
+        // Broadcast real-time rejection event
+        sseService.broadcast("action.rejected", java.util.Map.of(
+                "actionId", actionId,
+                "reason", reason != null ? reason : ""
+        ));
+
         auditService.log("RECOVERY_ACTION", actionId, "ACTION_REJECTED", rejectedBy, "Draft message rejected. Reason: " + reason);
     }
     
@@ -367,14 +437,24 @@ public class RecoveryActionService {
         String bank = (pe != null && bankHealthService != null) ? bankHealthService.extractBankCode(pe) : null;
         String paymentId = pe != null ? pe.getRazorpayPaymentId() : null;
         Long amount = pe != null ? pe.getAmount() : null;
-        String customerEmail = (pe != null && pe.getSubscription() != null && pe.getSubscription().getCustomer() != null)
-                ? pe.getSubscription().getCustomer().getEmail()
-                : null;
-        String customerName = (pe != null && pe.getSubscription() != null && pe.getSubscription().getCustomer() != null)
-                ? pe.getSubscription().getCustomer().getName()
-                : null;
+        
+        Customer customer = (pe != null) ? extractCustomer(pe) : null;
+        String customerEmail = customer != null ? customer.getEmail() : null;
+        String customerName = customer != null ? customer.getName() : null;
+
+        if (WebhookService.isPlaceholderOrVoidEmail(customerEmail)) {
+            customerEmail = "sujaypaul2711@gmail.com";
+        }
+        if (customerName == null || customerName.isBlank() || "Void".equalsIgnoreCase(customerName)) {
+            customerName = "Sujay Paul";
+        }
 
         String matchedRule = FailureClassificationService.describeMatchedRule(rawErrorCode, category != null ? category : "unknown");
+
+        boolean isDemo = Boolean.TRUE.equals(action.isDemoData())
+                || (action.getActor() != null && action.getActor().startsWith("DEMO"))
+                || (paymentId != null && paymentId.startsWith("pay_demo_"))
+                || (customerEmail != null && (customerEmail.contains("demo.customer") || customerEmail.contains("sujaypaul2711@gmail.com")));
 
         return com.recovermandate.dto.RecoveryActionResponse.builder()
                 .id(action.getId())
@@ -397,6 +477,7 @@ public class RecoveryActionService {
                 .amount(amount)
                 .customerEmail(customerEmail)
                 .customerName(customerName)
+                .isDemoData(isDemo)
                 .build();
     }
 }

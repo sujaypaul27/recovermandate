@@ -6,6 +6,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Controller exposing merchant configuration and recovery policy settings
+ * (e.g. auto-recovery thresholds, communication tone, and retry rules).
+ */
 @RestController
 @RequestMapping("/api/settings")
 @RequiredArgsConstructor

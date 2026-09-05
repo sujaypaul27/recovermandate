@@ -58,7 +58,7 @@ public class SseService {
                 emitter.send(SseEmitter.event()
                         .name(eventType)
                         .data(data, MediaType.APPLICATION_JSON));
-            } catch (IOException | IllegalStateException e) {
+            } catch (Exception e) {
                 log.debug("Failed to deliver SSE event to subscriber, removing emitter: {}", e.getMessage());
                 emitters.remove(emitter);
             }

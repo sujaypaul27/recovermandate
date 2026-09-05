@@ -70,6 +70,9 @@ export interface PaymentEventItem {
   recoveryActionId?: number;
   paymentLinkId?: string;
   paymentLinkUrl?: string;
+  traceId?: string;
+  isDemoData?: boolean;
+  recoveryStatus?: "RECOVERED" | "IN_PROGRESS" | string;
 }
 
 export interface RecoveryActionItem {
@@ -95,6 +98,7 @@ export interface RecoveryActionItem {
   createdAt: string;
   actor: string;
   tone?: string;
+  isDemoData?: boolean;
 }
 
 export interface AuditLogItem {
@@ -112,8 +116,12 @@ export interface AuditLogItem {
   aiModelUsed?: string;
 }
 
-export async function fetchDashboardSummary(): Promise<DashboardSummary> {
-  const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
+export async function fetchDashboardSummary(includeDemo = false): Promise<DashboardSummary> {
+  const url = new URL(`${API_BASE_URL}/dashboard/summary`);
+  if (includeDemo) {
+    url.searchParams.append("includeDemo", "true");
+  }
+  const res = await fetch(url.toString(), {
     headers: getHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch dashboard summary");
@@ -245,6 +253,15 @@ export async function verifyAuditChain(): Promise<AuditChainVerification> {
     headers: getHeaders(),
   });
   if (!res.ok) throw new Error("Failed to verify cryptographic audit chain");
+  return res.json();
+}
+
+export async function resealAuditChain(): Promise<AuditChainVerification> {
+  const res = await fetch(`${API_BASE_URL}/audit-log/reseal-chain`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to re-seal cryptographic audit chain");
   return res.json();
 }
 

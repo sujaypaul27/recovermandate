@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Service to generate and track Razorpay payment links for mandate recovery.
@@ -25,10 +26,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PaymentLinkService {
 
+    @org.springframework.beans.factory.annotation.Value("${razorpay.dry-run:false}")
+    private boolean dryRun = false;
+
     private final RazorpayApiClient razorpayApiClient;
     private final PaymentLinkRepository paymentLinkRepository;
     private final RecoveryActionRepository recoveryActionRepository;
     private final AuditService auditService;
+
+    public void setDryRun(boolean dryRun) {
+        this.dryRun = dryRun;
+    }
 
     /**
      * Generates a 48-hour Razorpay Payment Link for an approved recovery action.
@@ -39,6 +47,20 @@ public class PaymentLinkService {
     @Transactional
     public PaymentLink createLinkForRecoveryAction(RecoveryAction action) {
         log.info("Generating payment link for recovery action id={}", action.getId());
+
+        if (action.getId() != null) {
+            Optional<PaymentLink> existing = paymentLinkRepository.findByRecoveryActionId(action.getId());
+            if (existing.isPresent()) {
+                PaymentLink link = existing.get();
+                log.info("Idempotency guard: Reusing existing payment link for recovery action id={}: linkId={}, url={}",
+                        action.getId(), link.getRazorpayLinkId(), link.getShortUrl());
+                if (action.getPaymentLinkUrl() == null || !action.getPaymentLinkUrl().equals(link.getShortUrl())) {
+                    action.setPaymentLinkUrl(link.getShortUrl());
+                    recoveryActionRepository.save(action);
+                }
+                return link;
+            }
+        }
 
         PaymentEvent event = null;
         Customer customer = null;
@@ -66,15 +88,52 @@ public class PaymentLinkService {
                 ? "rec_link_" + event.getRazorpayPaymentId()
                 : "rec_link_act_" + action.getId();
 
-        Map<String, String> linkData = razorpayApiClient.createPaymentLink(
-                amount,
-                currency,
-                customerEmail,
-                customerName,
-                description,
-                expireBy,
-                referenceId
-        );
+        boolean isDemo = action.isDemoData()
+                || (event != null && event.isDemoData())
+                || dryRun;
+
+        Map<String, String> linkData;
+        if (isDemo) {
+            log.info("[DEMO] Generated local preview payment link for demo data.");
+            String frontendUrl = razorpayApiClient.getFrontendUrl();
+            String demoId = "demo_" + ((action.getId() != null) ? action.getId() : java.util.UUID.randomUUID().toString().substring(0, 8));
+            String demoUrl = frontendUrl + "/#/pay/" + demoId;
+            linkData = Map.of("id", demoId, "short_url", demoUrl);
+        } else {
+            try {
+                linkData = razorpayApiClient.createPaymentLink(
+                        amount,
+                        currency,
+                        customerEmail,
+                        customerName,
+                        description,
+                        expireBy,
+                        referenceId
+                );
+            } catch (Exception e) {
+                if (razorpayApiClient.isLiveMode()) {
+                    throw e;
+                }
+                log.warn("Razorpay API failed in test mode. Falling back to local demo payment link: {}", e.getMessage());
+                String frontendUrl = razorpayApiClient.getFrontendUrl();
+                String fallbackId = "plink_quota_" + System.currentTimeMillis();
+                String fallbackUrl = frontendUrl + "/#/pay/" + fallbackId;
+                linkData = Map.of("id", fallbackId, "short_url", fallbackUrl);
+            }
+
+            if (linkData == null || linkData.get("short_url") == null || linkData.get("short_url").isBlank()) {
+                if (!razorpayApiClient.isLiveMode()) {
+                    log.warn("Razorpay test limit reached or API failed. Falling back to local demo payment link.");
+                    String frontendUrl = razorpayApiClient.getFrontendUrl();
+                    String fallbackId = "plink_quota_" + System.currentTimeMillis();
+                    String fallbackUrl = frontendUrl + "/#/pay/" + fallbackId;
+                    linkData = Map.of("id", fallbackId, "short_url", fallbackUrl);
+                }
+            }
+
+            String shortUrl = (linkData != null) ? linkData.get("short_url") : null;
+            log.info("[LIVE] Created real Razorpay payment link for live recovery: {}", shortUrl);
+        }
 
         PaymentLink paymentLink = PaymentLink.builder()
                 .recoveryAction(action)
@@ -85,6 +144,7 @@ public class PaymentLinkService {
                 .expireBy(expireBy)
                 .status("CREATED")
                 .createdAt(Instant.now())
+                .isDemoData(isDemo)
                 .build();
 
         PaymentLink savedLink = paymentLinkRepository.save(paymentLink);

@@ -26,6 +26,8 @@ class GeminiClientTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(restTemplateBuilder.setConnectTimeout(any())).thenReturn(restTemplateBuilder);
+        lenient().when(restTemplateBuilder.setReadTimeout(any())).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.build()).thenReturn(new org.springframework.web.client.RestTemplate());
         geminiClient = new GeminiClient(restTemplateBuilder, new ObjectMapper(), heuristicFallbackEngine);
     }

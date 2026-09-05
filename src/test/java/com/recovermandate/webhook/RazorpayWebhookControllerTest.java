@@ -144,4 +144,34 @@ class RazorpayWebhookControllerTest {
         verify(webhookService).handleVerifiedEvent(SAMPLE_PAYLOAD);
         verify(webhookDlqRepository).save(dlq);
     }
+
+    @Test
+    @DisplayName("POST /api/webhooks/razorpay handles concurrent duplicate gracefully with 200 OK")
+    void handleWebhook_concurrentDuplicate_returns200() throws Exception {
+        when(signatureVerifier.verify(eq(SAMPLE_PAYLOAD), eq(VALID_SIGNATURE))).thenReturn(true);
+        when(webhookService.handleVerifiedEvent(SAMPLE_PAYLOAD))
+                .thenThrow(new RuntimeException("Duplicate webhook delivery already processed",
+                        new org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint")));
+
+        mockMvc.perform(post("/api/webhooks/razorpay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Razorpay-Signature", VALID_SIGNATURE)
+                        .content(SAMPLE_PAYLOAD))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("concurrent duplicate")));
+
+        verify(webhookDlqRepository, never()).save(any(WebhookDlq.class));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/webhooks/dlq/{id} deletes existing DLQ entry")
+    void deleteDlqEvent_success() throws Exception {
+        when(webhookDlqRepository.existsById(5L)).thenReturn(true);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/webhooks/dlq/5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(5));
+
+        verify(webhookDlqRepository).deleteById(5L);
+    }
 }

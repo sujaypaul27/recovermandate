@@ -21,6 +21,17 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Token-bucket rate limiting filter using Bucket4j to guard against denial-of-service,
+ * webhook flooding, and credential stuffing.
+ * <p>
+ * Enforces per-client-IP bounded buckets for:
+ * <ul>
+ *   <li>{@code /api/webhooks/razorpay} — 100 requests per minute</li>
+ *   <li>{@code /api/recovery-actions/**} approval mutations — 50 requests per minute</li>
+ *   <li>{@code /api/checkout/**} customer resolution — 60 requests per minute</li>
+ * </ul>
+ */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -30,6 +41,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final Map<String, Bucket> webhookBuckets = new ConcurrentHashMap<>();
     // In-memory map for action limits by IP
     private final Map<String, Bucket> actionBuckets = new ConcurrentHashMap<>();
+    // In-memory map for public checkout limits by IP
+    private final Map<String, Bucket> checkoutBuckets = new ConcurrentHashMap<>();
+
+    private static final int MAX_BUCKET_CACHE_SIZE = 5000;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -44,13 +59,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String clientIp = getClientIp(request);
 
         if (path.startsWith("/api/webhooks/razorpay")) {
-            Bucket bucket = webhookBuckets.computeIfAbsent(clientIp, k -> createWebhookBucket());
+            Bucket bucket = getBucketWithBoundedCache(webhookBuckets, clientIp, this::createWebhookBucket);
             if (!bucket.tryConsume(1)) {
                 sendTooManyRequestsError(response, request);
                 return;
             }
-        } else if (path.startsWith("/api/recovery-actions/") && (path.endsWith("/approve") || path.endsWith("/reject"))) {
-            Bucket bucket = actionBuckets.computeIfAbsent(clientIp, k -> createActionBucket());
+        } else if (path.startsWith("/api/recovery-actions/") && 
+                (path.endsWith("/approve") || path.endsWith("/reject") || path.endsWith("/batch-approve") || path.endsWith("/approve-and-dispatch"))) {
+            Bucket bucket = getBucketWithBoundedCache(actionBuckets, clientIp, this::createActionBucket);
+            if (!bucket.tryConsume(1)) {
+                sendTooManyRequestsError(response, request);
+                return;
+            }
+        } else if (path.startsWith("/api/checkout/")) {
+            Bucket bucket = getBucketWithBoundedCache(checkoutBuckets, clientIp, this::createCheckoutBucket);
             if (!bucket.tryConsume(1)) {
                 sendTooManyRequestsError(response, request);
                 return;
@@ -60,12 +82,23 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    private Bucket getBucketWithBoundedCache(Map<String, Bucket> cache, String key, java.util.function.Supplier<Bucket> bucketSupplier) {
+        if (cache.size() >= MAX_BUCKET_CACHE_SIZE) {
+            cache.clear();
+        }
+        return cache.computeIfAbsent(key, k -> bucketSupplier.get());
+    }
+
     private String getClientIp(HttpServletRequest request) {
         String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null) {
-            return request.getRemoteAddr();
+        if (xfHeader != null && !xfHeader.isBlank()) {
+            String firstIp = xfHeader.split(",")[0].trim();
+            if (!firstIp.isBlank()) {
+                return firstIp;
+            }
         }
-        return xfHeader.split(",")[0];
+        String remoteAddr = request.getRemoteAddr();
+        return (remoteAddr != null && !remoteAddr.isBlank()) ? remoteAddr : "unknown";
     }
 
     private Bucket createWebhookBucket() {
@@ -77,6 +110,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private Bucket createActionBucket() {
         // 50 requests per minute
         Bandwidth limit = Bandwidth.builder().capacity(50).refillGreedy(50, Duration.ofMinutes(1)).build();
+        return Bucket.builder().addLimit(limit).build();
+    }
+
+    private Bucket createCheckoutBucket() {
+        // 60 requests per minute
+        Bandwidth limit = Bandwidth.builder().capacity(60).refillGreedy(60, Duration.ofMinutes(1)).build();
         return Bucket.builder().addLimit(limit).build();
     }
 

@@ -70,6 +70,11 @@ public class RazorpayWebhookController {
 
             return ResponseEntity.ok("Webhook processed successfully with event id: " + paymentEvent.getId());
         } catch (Exception e) {
+            if (isDuplicateViolation(e)) {
+                log.info("Concurrent duplicate webhook delivery acknowledged idempotently as 200 OK");
+                return ResponseEntity.ok("Webhook already processed (concurrent duplicate acknowledged)");
+            }
+
             log.error("Unhandled error processing verified webhook, routing to DLQ: {}", e.getMessage(), e);
 
             WebhookDlq dlq = WebhookDlq.builder()
@@ -83,6 +88,24 @@ public class RazorpayWebhookController {
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Webhook processing failed; routed to DLQ: " + e.getMessage());
         }
+    }
+
+    private boolean isDuplicateViolation(Throwable t) {
+        while (t != null) {
+            if (t instanceof org.springframework.dao.DataIntegrityViolationException
+                    || t instanceof org.hibernate.exception.ConstraintViolationException) {
+                return true;
+            }
+            String msg = t.getMessage();
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("duplicate key") || lower.contains("unique constraint") || lower.contains("ukcr6bk3kokmyexwxpleuhel7sx") || lower.contains("razorpay_payment_id")) {
+                    return true;
+                }
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**
@@ -129,5 +152,17 @@ public class RazorpayWebhookController {
                     "dlqId", id
             ));
         }
+    }
+
+    /**
+     * Deletes a specific DLQ event.
+     */
+    @DeleteMapping("/dlq/{id}")
+    public ResponseEntity<?> deleteDlqEvent(@PathVariable Long id) {
+        if (webhookDlqRepository.existsById(id)) {
+            webhookDlqRepository.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "DLQ event " + id + " deleted", "id", id));
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "DLQ event not found with id " + id));
     }
 }

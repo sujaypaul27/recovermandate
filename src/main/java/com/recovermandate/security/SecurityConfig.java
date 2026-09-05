@@ -16,6 +16,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Spring Security configuration establishing a stateless API security model.
+ * <p>
+ * Configures CORS policies, disables session creation and CSRF (appropriate for stateless REST APIs),
+ * and places {@link RateLimitFilter} and {@link ApiKeyAuthFilter} in the filter chain.
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {

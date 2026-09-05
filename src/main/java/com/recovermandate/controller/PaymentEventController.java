@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Controller providing paginated query access to captured webhook payment events,
+ * classifications, and recovery progress.
+ */
 @RestController
 @RequestMapping("/api/payment-events")
 @RequiredArgsConstructor

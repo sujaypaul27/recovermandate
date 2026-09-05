@@ -30,6 +30,7 @@ import {
 import {
   fetchAuditLogs,
   verifyAuditChain,
+  resealAuditChain,
   fetchWebhookDlq,
   replayWebhookDlq,
   type AuditChainVerification,
@@ -62,6 +63,7 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
 
   const [chainStatus, setChainStatus] = useState<AuditChainVerification | null>(null);
   const [verifyingChain, setVerifyingChain] = useState(false);
+  const [resealingChain, setResealingChain] = useState(false);
 
   // Webhook DLQ State
   const [dlqItems, setDlqItems] = useState<WebhookDlqItem[]>([]);
@@ -85,6 +87,19 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
       });
     } finally {
       setVerifyingChain(false);
+    }
+  };
+
+  const handleReseal = async () => {
+    setResealingChain(true);
+    try {
+      const res = await resealAuditChain();
+      setChainStatus(res);
+      loadAuditLogs();
+    } catch (e: any) {
+      alert("Failed to re-seal audit chain: " + e.message);
+    } finally {
+      setResealingChain(false);
     }
   };
 
@@ -287,6 +302,20 @@ export function AuditLogPage({ refreshTrigger }: { refreshTrigger?: number }) {
                     <span>⚠️ Chain Broken at ID #{chainStatus.brokenAtId}</span>
                   </div>
                 )
+              )}
+
+              {chainStatus && !chainStatus.valid && (
+                <Button
+                  onClick={handleReseal}
+                  disabled={resealingChain}
+                  variant="outline"
+                  size="sm"
+                  title="Re-anchors cryptographic SHA-256 hashes across current audit entries to restore proof-of-integrity"
+                  className="h-8 text-xs font-semibold gap-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 border-blue-500/30"
+                >
+                  <ShieldCheck className={`w-3.5 h-3.5 ${resealingChain ? "animate-spin" : ""}`} />
+                  {resealingChain ? "Re-sealing..." : "Re-seal Chain"}
+                </Button>
               )}
 
               <Button

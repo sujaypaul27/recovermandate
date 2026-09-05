@@ -42,16 +42,30 @@ public class DispatchService {
         PaymentEvent event = null;
         if (action.getFailureClassification() != null && action.getFailureClassification().getPaymentEvent() != null) {
             event = action.getFailureClassification().getPaymentEvent();
-            if (event.getSubscription() != null) {
+            if (event.getSubscription() != null && event.getSubscription().getCustomer() != null) {
                 customer = event.getSubscription().getCustomer();
             }
         }
 
-        String recipientEmail = customer != null && customer.getEmail() != null && !customer.getEmail().isBlank()
+        String recipientEmail = customer != null && customer.getEmail() != null && !customer.getEmail().isBlank() && !WebhookService.isPlaceholderOrVoidEmail(customer.getEmail())
                 ? customer.getEmail().trim()
                 : null;
 
-        if (recipientEmail == null) {
+        if (recipientEmail == null && event != null && event.getRawPayload() != null && !event.getRawPayload().isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(event.getRawPayload());
+                com.fasterxml.jackson.databind.JsonNode paymentEntity = root.path("payload").path("payment").path("entity");
+                com.fasterxml.jackson.databind.JsonNode subscriptionEntity = root.path("payload").path("subscription").path("entity");
+                recipientEmail = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+                if (recipientEmail != null && WebhookService.isPlaceholderOrVoidEmail(recipientEmail)) {
+                    recipientEmail = null;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("Cannot dispatch recovery email for action id={}: missing customer email", action.getId());
 
             DispatchLog failedLog = DispatchLog.builder()
@@ -81,6 +95,10 @@ public class DispatchService {
         Long amount = event != null ? event.getAmount() : null;
         String currency = "INR";
         String messageText = action.getAiDraftMessage();
+        if (messageText != null && paymentLinkUrl != null && !paymentLinkUrl.isBlank()) {
+            messageText = com.recovermandate.util.PaymentLinkPlaceholderUtil.replacePlaceholderLinks(messageText, paymentLinkUrl);
+            action.setAiDraftMessage(messageText);
+        }
 
         log.info("Executing recovery email dispatch to {} for action id={} with link {}",
                 maskedRecipient, action.getId(), paymentLinkUrl);

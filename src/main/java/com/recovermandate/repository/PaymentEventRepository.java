@@ -8,12 +8,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long> {
 
-    Optional<PaymentEvent> findByRazorpayPaymentId(String razorpayPaymentId);
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM PaymentEvent p WHERE LOWER(p.razorpayPaymentId) = LOWER(:razorpayPaymentId)")
+    Optional<PaymentEvent> findByRazorpayPaymentId(@org.springframework.data.repository.query.Param("razorpayPaymentId") String razorpayPaymentId);
+    Optional<PaymentEvent> findByRazorpayPaymentIdIgnoreCase(String razorpayPaymentId);
+    boolean existsByRazorpayPaymentIdIgnoreCase(String razorpayPaymentId);
 
     long countByEventType(String eventType);
 
+    long countByIsDemoData(boolean isDemoData);
+
+    long countByEventTypeAndIsDemoData(String eventType, boolean isDemoData);
+
     @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(p.amount), 0) FROM PaymentEvent p WHERE p.eventType = :eventType")
     long sumAmountByEventType(@org.springframework.data.repository.query.Param("eventType") String eventType);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(p.amount), 0) FROM PaymentEvent p WHERE p.eventType = :eventType AND p.isDemoData = :isDemoData")
+    long sumAmountByEventTypeAndIsDemoData(@org.springframework.data.repository.query.Param("eventType") String eventType, @org.springframework.data.repository.query.Param("isDemoData") boolean isDemoData);
 
     @org.springframework.data.jpa.repository.Query(
         "SELECT p FROM PaymentEvent p " +
@@ -29,6 +39,9 @@ public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long
 
     @org.springframework.data.jpa.repository.Query("SELECT fc.category, COUNT(fc) FROM FailureClassification fc GROUP BY fc.category")
     java.util.List<Object[]> countFailuresByCategory();
+
+    @org.springframework.data.jpa.repository.Query("SELECT fc.category, COUNT(fc) FROM FailureClassification fc JOIN fc.paymentEvent p WHERE p.isDemoData = :isDemoData GROUP BY fc.category")
+    java.util.List<Object[]> countFailuresByCategoryAndIsDemoData(@org.springframework.data.repository.query.Param("isDemoData") boolean isDemoData);
 
     @org.springframework.data.jpa.repository.Query(
         "SELECT p FROM PaymentEvent p " +

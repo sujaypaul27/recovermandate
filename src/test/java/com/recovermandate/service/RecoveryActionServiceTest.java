@@ -400,4 +400,43 @@ class RecoveryActionServiceTest {
         assertEquals("DISPATCHED", dispatched.getStatus());
         verify(dispatchService).dispatchRecovery(any(), eq("https://rzp.io/l/plink_sim_legacy"));
     }
+
+    @Test
+    void testGetRecoveryActions_returnsDistinctCustomerEmailsPerAction() {
+        com.recovermandate.entity.Customer customer1 = com.recovermandate.entity.Customer.builder()
+                .id(101L).name("Customer One").email("customer1@alpha.com").build();
+        com.recovermandate.entity.Subscription sub1 = com.recovermandate.entity.Subscription.builder()
+                .id(201L).customer(customer1).build();
+        PaymentEvent pe1 = PaymentEvent.builder()
+                .id(301L).amount(49900L).subscription(sub1).build();
+        FailureClassification fc1 = FailureClassification.builder()
+                .id(401L).paymentEvent(pe1).category("insufficient_funds").build();
+        RecoveryAction action1 = RecoveryAction.builder()
+                .id(1L).failureClassification(fc1).status("DRAFTED").build();
+
+        com.recovermandate.entity.Customer customer2 = com.recovermandate.entity.Customer.builder()
+                .id(102L).name("Customer Two").email("customer2@beta.com").build();
+        com.recovermandate.entity.Subscription sub2 = com.recovermandate.entity.Subscription.builder()
+                .id(202L).customer(customer2).build();
+        PaymentEvent pe2 = PaymentEvent.builder()
+                .id(302L).amount(89900L).subscription(sub2).build();
+        FailureClassification fc2 = FailureClassification.builder()
+                .id(402L).paymentEvent(pe2).category("technical_decline").build();
+        RecoveryAction action2 = RecoveryAction.builder()
+                .id(2L).failureClassification(fc2).status("DRAFTED").build();
+
+        org.springframework.data.domain.Page<RecoveryAction> page = new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(action1, action2)
+        );
+
+        when(recoveryActionRepository.findByStatus(eq("DRAFTED"), any())).thenReturn(page);
+
+        org.springframework.data.domain.Page<com.recovermandate.dto.RecoveryActionResponse> responsePage =
+                recoveryActionService.getRecoveryActions("DRAFTED", org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertNotNull(responsePage);
+        assertEquals(2, responsePage.getContent().size());
+        assertEquals("customer1@alpha.com", responsePage.getContent().get(0).getCustomerEmail());
+        assertEquals("customer2@beta.com", responsePage.getContent().get(1).getCustomerEmail());
+    }
 }

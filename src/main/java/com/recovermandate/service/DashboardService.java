@@ -32,21 +32,50 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
-        long totalPayments = paymentEventRepository.count();
-        long successfulPayments = paymentEventRepository.countByEventType("subscription.charged");
-        long failedCount = paymentEventRepository.countByEventType("payment.failed");
-        long recoveredAmount = paymentEventRepository.sumAmountByEventType("subscription.charged");
+        return getSummary(false);
+    }
 
-        long pendingApprovals = recoveryActionRepository.countByStatus("DRAFTED");
-        long blockedDrafts = recoveryActionRepository.countByStatus("BLOCKED");
-        long approvedDrafts = recoveryActionRepository.countByStatus("APPROVED");
-        long dispatchedMessages = recoveryActionRepository.countByStatus("DISPATCHED");
-        long recoveredActions = recoveryActionRepository.countByStatus("RECOVERED");
-        long totalDrafts = recoveryActionRepository.count();
+    @Transactional(readOnly = true)
+    public DashboardSummaryResponse getSummary(boolean includeDemoData) {
+        long totalPayments;
+        long successfulPayments;
+        long failedCount;
+        long recoveredAmount;
+        long pendingApprovals;
+        long blockedDrafts;
+        long approvedDrafts;
+        long dispatchedMessages;
+        long recoveredActions;
+        long totalDrafts;
 
-        // Failed PaymentEvents subsequently recovered (RecoveryAction status = RECOVERED or DISPATCHED as proxy)
-        // NOTE: Once RECOVERED status is fully written by webhook listener, update proxy to only count RECOVERED
-        long recoveredCount = recoveredActions > 0 ? recoveredActions : dispatchedMessages;
+        if (includeDemoData) {
+            totalPayments = paymentEventRepository.count();
+            successfulPayments = paymentEventRepository.countByEventType("subscription.charged") + paymentEventRepository.countByEventType("payment_link.paid");
+            failedCount = paymentEventRepository.countByEventType("payment.failed");
+            recoveredAmount = paymentEventRepository.sumAmountByEventType("subscription.charged") + paymentLinkRepository.sumAmountByStatus("PAID");
+
+            pendingApprovals = recoveryActionRepository.countByStatus("DRAFTED");
+            blockedDrafts = recoveryActionRepository.countByStatus("BLOCKED");
+            approvedDrafts = recoveryActionRepository.countByStatus("APPROVED");
+            dispatchedMessages = recoveryActionRepository.countByStatus("DISPATCHED");
+            recoveredActions = recoveryActionRepository.countByStatus("RECOVERED");
+            totalDrafts = recoveryActionRepository.count();
+        } else {
+            totalPayments = paymentEventRepository.countByIsDemoData(false);
+            successfulPayments = paymentEventRepository.countByEventTypeAndIsDemoData("subscription.charged", false) + paymentEventRepository.countByEventTypeAndIsDemoData("payment_link.paid", false);
+            failedCount = paymentEventRepository.countByEventTypeAndIsDemoData("payment.failed", false);
+            recoveredAmount = paymentEventRepository.sumAmountByEventTypeAndIsDemoData("subscription.charged", false) + paymentLinkRepository.sumAmountByStatusAndIsDemoData("PAID", false);
+
+            pendingApprovals = recoveryActionRepository.countByStatusAndIsDemoData("DRAFTED", false);
+            blockedDrafts = recoveryActionRepository.countByStatusAndIsDemoData("BLOCKED", false);
+            approvedDrafts = recoveryActionRepository.countByStatusAndIsDemoData("APPROVED", false);
+            dispatchedMessages = recoveryActionRepository.countByStatusAndIsDemoData("DISPATCHED", false);
+            recoveredActions = recoveryActionRepository.countByStatusAndIsDemoData("RECOVERED", false);
+            totalDrafts = recoveryActionRepository.countByIsDemoData(false);
+        }
+
+        // Failed PaymentEvents subsequently recovered (strictly counting RECOVERED actions)
+        long recoveredCount = recoveredActions;
 
         double successRate = totalPayments > 0 ? ((double) successfulPayments / totalPayments) * 100.0 : 0.0;
         double recoveryRate = failedCount > 0 ? Math.min(100.0, ((double) recoveredCount / failedCount) * 100.0) : 0.0;
@@ -58,7 +87,10 @@ public class DashboardService {
         failuresByCategory.put(FailureClassificationService.CATEGORY_EXPIRED_MANDATE, 0L);
         failuresByCategory.put(FailureClassificationService.CATEGORY_UNKNOWN, 0L);
 
-        List<Object[]> categoryCounts = failureClassificationRepository.countByCategory();
+        List<Object[]> categoryCounts = includeDemoData
+                ? failureClassificationRepository.countByCategory()
+                : paymentEventRepository.countFailuresByCategoryAndIsDemoData(false);
+
         if (categoryCounts != null) {
             for (Object[] row : categoryCounts) {
                 if (row.length >= 2 && row[0] != null && row[1] instanceof Number) {
@@ -68,7 +100,7 @@ public class DashboardService {
         }
 
         // Calculate Average Resolution Time (MTTR) in minutes
-        double avgResolutionTimeMinutes = computeAvgResolutionMinutes();
+        double avgResolutionTimeMinutes = computeAvgResolutionMinutes(includeDemoData);
 
         return DashboardSummaryResponse.builder()
                 .recoveredAmount(recoveredAmount)
@@ -88,9 +120,10 @@ public class DashboardService {
                 .build();
     }
 
-    private double computeAvgResolutionMinutes() {
-        List<RecoveryAction> resolvedActions = recoveryActionRepository
-                .findByApprovedAtIsNotNull(org.springframework.data.domain.PageRequest.of(0, 100))
+    private double computeAvgResolutionMinutes(boolean includeDemoData) {
+        List<RecoveryAction> resolvedActions = (includeDemoData
+                ? recoveryActionRepository.findByApprovedAtIsNotNull(org.springframework.data.domain.PageRequest.of(0, 100))
+                : recoveryActionRepository.findByApprovedAtIsNotNullAndIsDemoData(false, org.springframework.data.domain.PageRequest.of(0, 100)))
                 .getContent();
         if (resolvedActions == null || resolvedActions.isEmpty()) {
             return 4.2; // Default baseline benchmark MTTR

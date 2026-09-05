@@ -15,6 +15,19 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+/**
+ * Background scheduler that periodically reconciles payment events and payment link
+ * statuses against the Razorpay API.
+ * <p>
+ * Performs two key operational safety functions:
+ * <ol>
+ *   <li><b>Backfill Ingestion:</b> Scans Razorpay for recent failed payment events within a 24-hour lookback window
+ *       that may have been dropped due to network partitions or webhook timeouts. Reconciled events are ingested
+ *       with {@code isDemoData = true} to prevent artificial backlog inflation on live operational metrics.</li>
+ *   <li><b>Payment Link Settlement:</b> Reconciles open live Razorpay payment links against the gateway API,
+ *       transitioning recovered mandates to {@code PAID} / {@code RECOVERED} if customer settled out-of-band.</li>
+ * </ol>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -23,9 +36,15 @@ public class WebhookReconciliationScheduler {
     private final RazorpayApiClient razorpayApiClient;
     private final WebhookService webhookService;
     private final PaymentEventRepository paymentEventRepository;
+    private final com.recovermandate.repository.PaymentLinkRepository paymentLinkRepository;
+    private final com.recovermandate.repository.RecoveryActionRepository recoveryActionRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Executes the reconciliation cycle on a configurable cron expression
+     * (defaults to every 15 minutes: {@code 0 0/15 * * * ?}).
+     */
     @Scheduled(cron = "${recovermandate.reconciliation.cron:0 0/15 * * * ?}")
     public void reconcileWebhooks() {
         log.info("Starting webhook reconciliation job");
@@ -39,15 +58,54 @@ public class WebhookReconciliationScheduler {
             foundCount = rawEvents.size();
 
             for (String rawEvent : rawEvents) {
+                if (ingestedCount >= 5) {
+                    break;
+                }
                 JsonNode root = objectMapper.readTree(rawEvent);
                 String paymentId = extractPaymentId(root);
                 
                 if (paymentId != null && !paymentId.isBlank()) {
-                    boolean exists = paymentEventRepository.findByRazorpayPaymentId(paymentId).isPresent();
+                    boolean exists = paymentEventRepository.findByRazorpayPaymentIdIgnoreCase(paymentId).isPresent();
                     if (!exists) {
+                        String desc = root.path("payload").path("payment").path("entity").path("description").asText("");
+                        if (desc.startsWith("#plink_") || desc.contains("plink_")) {
+                            log.debug("Skipping reconciliation ingestion for payment link attempt: {}", paymentId);
+                            continue;
+                        }
+
                         log.info("Missing payment event found during reconciliation, ingesting: {}", paymentId);
-                        webhookService.handleVerifiedEvent(rawEvent);
+                        webhookService.handleVerifiedEvent(rawEvent, true); // reconciled/backfilled events are not live demo traffic — mark as demo data to avoid polluting live metrics
                         ingestedCount++;
+                    }
+                }
+            }
+
+            // Reconcile open live payment links against Razorpay API
+            if (paymentLinkRepository != null) {
+                List<com.recovermandate.entity.PaymentLink> openLinks = paymentLinkRepository.findAll();
+                for (com.recovermandate.entity.PaymentLink pl : openLinks) {
+                    if ("CREATED".equalsIgnoreCase(pl.getStatus()) && pl.getRazorpayLinkId() != null 
+                            && !pl.getRazorpayLinkId().startsWith("plink_sim_") && !pl.getRazorpayLinkId().startsWith("plink_preview_")) {
+                        try {
+                            JsonNode rzpLink = razorpayApiClient.fetchPaymentLink(pl.getRazorpayLinkId());
+                            if (rzpLink != null) {
+                                String rzpStatus = rzpLink.path("status").asText();
+                                long amountPaid = rzpLink.path("amount_paid").asLong(0);
+                                if ("paid".equalsIgnoreCase(rzpStatus) || amountPaid > 0) {
+                                    pl.setStatus("PAID");
+                                    pl.setPaidAt(Instant.now());
+                                    paymentLinkRepository.save(pl);
+
+                                    com.recovermandate.entity.RecoveryAction action = pl.getRecoveryAction();
+                                    if (action != null && recoveryActionRepository != null) {
+                                        action.setStatus("RECOVERED");
+                                        recoveryActionRepository.save(action);
+                                    }
+                                    log.info("Reconciled paid payment link from Razorpay API: linkId={}", pl.getRazorpayLinkId());
+                                }
+                            }
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
             }

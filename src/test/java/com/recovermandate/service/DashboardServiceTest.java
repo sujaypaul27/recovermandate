@@ -42,17 +42,76 @@ class DashboardServiceTest {
     private DashboardService dashboardService;
 
     @Test
-    @DisplayName("Should compute all ROI, performance, funnel, and category metrics")
-    void getSummary_computesComprehensiveMetrics() {
+    @DisplayName("Should compute live-only ROI, performance, funnel, and category metrics by default")
+    void getSummary_computesComprehensiveMetrics_liveDefault() {
+        when(paymentEventRepository.countByIsDemoData(false)).thenReturn(100L);
+        when(paymentEventRepository.countByEventTypeAndIsDemoData("subscription.charged", false)).thenReturn(80L);
+        when(paymentEventRepository.countByEventTypeAndIsDemoData("payment_link.paid", false)).thenReturn(0L);
+        when(paymentEventRepository.countByEventTypeAndIsDemoData("payment.failed", false)).thenReturn(20L);
+        when(paymentEventRepository.sumAmountByEventTypeAndIsDemoData("subscription.charged", false)).thenReturn(500000L);
+        when(paymentLinkRepository.sumAmountByStatusAndIsDemoData("PAID", false)).thenReturn(0L);
+
+        when(recoveryActionRepository.countByStatusAndIsDemoData("DRAFTED", false)).thenReturn(5L);
+        when(recoveryActionRepository.countByStatusAndIsDemoData("BLOCKED", false)).thenReturn(2L);
+        when(recoveryActionRepository.countByStatusAndIsDemoData("APPROVED", false)).thenReturn(8L);
+        when(recoveryActionRepository.countByStatusAndIsDemoData("DISPATCHED", false)).thenReturn(5L);
+        when(recoveryActionRepository.countByStatusAndIsDemoData("RECOVERED", false)).thenReturn(5L);
+        when(recoveryActionRepository.countByIsDemoData(false)).thenReturn(20L);
+
+        List<Object[]> categoryCounts = List.of(
+                new Object[]{"insufficient_funds", 12L},
+                new Object[]{"technical_decline", 8L}
+        );
+        when(paymentEventRepository.countFailuresByCategoryAndIsDemoData(false)).thenReturn(categoryCounts);
+
+        PaymentEvent event = new PaymentEvent();
+        event.setReceivedAt(Instant.now().minusSeconds(300));
+
+        FailureClassification fc = new FailureClassification();
+        fc.setPaymentEvent(event);
+
+        RecoveryAction action = new RecoveryAction();
+        action.setFailureClassification(fc);
+        action.setApprovedAt(Instant.now());
+
+        when(recoveryActionRepository.findByApprovedAtIsNotNullAndIsDemoData(org.mockito.ArgumentMatchers.eq(false), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(action)));
+
+        DashboardSummaryResponse summary = dashboardService.getSummary();
+
+        assertNotNull(summary);
+        assertEquals(500000L, summary.getRecoveredAmount());
+        assertEquals(20L, summary.getFailedCount());
+        assertEquals(5L, summary.getPendingApprovalsCount());
+        assertEquals(2L, summary.getBlockedDraftsCount());
+        assertEquals(100L, summary.getTotalPaymentsProcessed());
+        assertEquals(80L, summary.getSuccessfulPaymentsCount());
+        assertEquals(80.0, summary.getSuccessRate());
+        assertEquals(20L, summary.getDraftsGenerated());
+        assertEquals(13L, summary.getDraftsApproved());
+        assertEquals(5L, summary.getMessagesDispatched());
+        assertEquals(5L, summary.getPaymentsRecovered());
+        assertEquals(25.0, summary.getRecoveryRate());
+        assertTrue(summary.getAvgResolutionTimeMinutes() > 0.0);
+        assertEquals(12L, summary.getFailuresByCategory().get("insufficient_funds"));
+        assertEquals(8L, summary.getFailuresByCategory().get("technical_decline"));
+    }
+
+    @Test
+    @DisplayName("Should compute combined sandbox and live metrics when includeDemoData=true")
+    void getSummary_computesComprehensiveMetrics_includeDemo() {
         when(paymentEventRepository.count()).thenReturn(100L);
         when(paymentEventRepository.countByEventType("subscription.charged")).thenReturn(80L);
+        when(paymentEventRepository.countByEventType("payment_link.paid")).thenReturn(0L);
         when(paymentEventRepository.countByEventType("payment.failed")).thenReturn(20L);
         when(paymentEventRepository.sumAmountByEventType("subscription.charged")).thenReturn(500000L);
+        when(paymentLinkRepository.sumAmountByStatus("PAID")).thenReturn(0L);
 
         when(recoveryActionRepository.countByStatus("DRAFTED")).thenReturn(5L);
         when(recoveryActionRepository.countByStatus("BLOCKED")).thenReturn(2L);
         when(recoveryActionRepository.countByStatus("APPROVED")).thenReturn(8L);
         when(recoveryActionRepository.countByStatus("DISPATCHED")).thenReturn(5L);
+        when(recoveryActionRepository.countByStatus("RECOVERED")).thenReturn(5L);
         when(recoveryActionRepository.count()).thenReturn(20L);
 
         List<Object[]> categoryCounts = List.of(
@@ -74,7 +133,7 @@ class DashboardServiceTest {
         when(recoveryActionRepository.findByApprovedAtIsNotNull(any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(action)));
 
-        DashboardSummaryResponse summary = dashboardService.getSummary();
+        DashboardSummaryResponse summary = dashboardService.getSummary(true);
 
         assertNotNull(summary);
         assertEquals(500000L, summary.getRecoveredAmount());

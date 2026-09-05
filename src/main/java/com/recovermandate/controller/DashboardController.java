@@ -7,6 +7,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Controller exposing real-time operational metrics and CSV ledger exports
+ * for dashboard visualization and revenue recovery auditing.
+ */
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
@@ -15,8 +19,9 @@ public class DashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping("/summary")
-    public DashboardSummaryResponse getSummary() {
-        return dashboardService.getSummary();
+    public DashboardSummaryResponse getSummary(
+            @org.springframework.web.bind.annotation.RequestParam(name = "includeDemo", required = false, defaultValue = "false") boolean includeDemo) {
+        return dashboardService.getSummary(includeDemo);
     }
 
     @GetMapping(value = "/export-csv", produces = "text/csv; charset=UTF-8")

@@ -6,6 +6,14 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 9
+      minimum-idle: 2
+      max-lifetime: 180000
+      idle-timeout: 120000
+      connection-timeout: 30000
+      keepalive-time: 60000
+      validation-timeout: 5000
   jpa:
     hibernate:
       # NOTE: update is intentional for demo/buildathon environment — would be validate/none in real production with migrations
@@ -37,18 +45,23 @@ logging:
     root: INFO
     com.recovermandate: DEBUG
 razorpay:
+  dry-run: ${RAZORPAY_DRY_RUN:false}
   webhook:
-    secret: ${RAZORPAY_WEBHOOK_SECRET:}
+    secret: ${RAZORPAY_WEBHOOK_SECRET:${RAZORPAY_SECRET:}}
     replay-window-seconds: ${RAZORPAY_REPLAY_WINDOW:300}
   api:
     key:
-      id: ${RAZORPAY_KEY_ID:}
-      secret: ${RAZORPAY_KEY_SECRET:}
+      id: ${RAZORPAY_KEY_ID:${RAZORPAY_API_KEY_ID:${RAZORPAY_KEY:}}}
+      secret: ${RAZORPAY_KEY_SECRET:${RAZORPAY_API_KEY_SECRET:${RAZORPAY_SECRET:}}}
+    key-id: ${RAZORPAY_KEY_ID:${RAZORPAY_API_KEY_ID:${RAZORPAY_KEY:}}}
+    key-secret: ${RAZORPAY_KEY_SECRET:${RAZORPAY_API_KEY_SECRET:${RAZORPAY_SECRET:}}}
     base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}
 gemini:
+  model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
   api:
     key: ${GEMINI_API_KEY:}
 recovermandate:
+  app-url: ${APP_URL:http://localhost:5173}
   security:
     api-key: ${API_KEY:default-dev-key}
   cors:
@@ -80,4 +93,4 @@ resilience4j:
   timelimiter:
     instances:
       geminiApi:
-        timeoutDuration: 10s
+        timeoutDuration: 30s

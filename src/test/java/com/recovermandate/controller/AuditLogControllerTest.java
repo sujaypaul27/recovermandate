@@ -16,6 +16,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -64,5 +65,21 @@ class AuditLogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valid").value(true))
                 .andExpect(jsonPath("$.chainLength").value(15));
+    }
+
+    @Test
+    void resealChain_returnsResult() throws Exception {
+        com.recovermandate.dto.AuditChainVerificationResponse response = com.recovermandate.dto.AuditChainVerificationResponse.builder()
+                .valid(true)
+                .chainLength(15L)
+                .message("Cryptographic hash chain re-sealed successfully")
+                .build();
+
+        when(auditService.resealChain()).thenReturn(response);
+
+        mockMvc.perform(post("/api/audit-log/reseal-chain"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.message").value("Cryptographic hash chain re-sealed successfully"));
     }
 }

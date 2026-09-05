@@ -34,6 +34,7 @@ class DashboardControllerTest {
                 .blockedDraftsCount(1)
                 .build();
 
+        when(dashboardService.getSummary(org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(response);
         when(dashboardService.getSummary()).thenReturn(response);
 
         mockMvc.perform(get("/api/dashboard/summary"))

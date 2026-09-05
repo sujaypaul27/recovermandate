@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import {
   Settings,
   Keyboard,
   XCircle,
+  Download,
 } from "lucide-react";
 
 import { API_BASE_URL, API_KEY } from "./lib/api";
@@ -45,6 +46,25 @@ export default function App() {
   const [hasNewFailedMandate, setHasNewFailedMandate] = useState(false);
   const [pendingDraftCount, setPendingDraftCount] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Persistent Demo Target Email State (persists across tab navigation and browser sessions)
+  const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("recovermandate_target_email") || "sujaypaul2711@gmail.com";
+    }
+    return "sujaypaul2711@gmail.com";
+  });
+
+  const handleTargetCustomerEmailChange = (email: string | null) => {
+    setTargetCustomerEmail(email);
+    if (typeof window !== "undefined") {
+      if (email) {
+        sessionStorage.setItem("recovermandate_target_email", email);
+      } else {
+        sessionStorage.removeItem("recovermandate_target_email");
+      }
+    }
+  };
 
   const { toast } = useToast();
 
@@ -77,7 +97,9 @@ export default function App() {
     const handleHash = () => {
       const hash = window.location.hash;
       const pathname = window.location.pathname;
-      if (hash.startsWith("#pay/")) {
+      if (hash.startsWith("#/pay/")) {
+        setCheckoutLinkId(hash.replace("#/pay/", ""));
+      } else if (hash.startsWith("#pay/")) {
         setCheckoutLinkId(hash.replace("#pay/", ""));
       } else if (pathname.startsWith("/pay/")) {
         setCheckoutLinkId(pathname.replace("/pay/", ""));
@@ -155,11 +177,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleTabChange, toast]);
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      setRefreshTrigger((prev) => prev + 1);
+    }, 250);
+  }, []);
+
   // SSE Event Handler Callback
   const handleSseEvent = useCallback(
     (eventType: string, data: any) => {
       console.log("[SSE Event Received]", eventType, data);
-      setRefreshTrigger((prev) => prev + 1);
+      triggerRefresh();
 
       if (eventType === "webhook.received") {
         setHasNewFailedMandate(true);
@@ -174,23 +207,26 @@ export default function App() {
           description: `Gemini generated recovery action #${data.actionId || ""} (${data.draftSource || "AI"}).`,
         });
       } else if (eventType === "action.approved") {
+        setPendingDraftCount((prev) => Math.max(0, prev - 1));
         toast({
           title: "Action Approved",
           description: `Recovery action #${data.actionId || ""} approved & signed.`,
         });
       } else if (eventType === "recovery.dispatched") {
+        setPendingDraftCount((prev) => Math.max(0, prev - 1));
         toast({
           title: "Recovery Link Dispatched",
           description: `Razorpay payment link dispatched via ${data.channel || "EMAIL"}.`,
         });
-      } else if (eventType === "payment.recovered") {
+      } else if (eventType === "payment.recovered" || eventType === "recovery.completed") {
+        setPendingDraftCount((prev) => Math.max(0, prev - 1));
         toast({
           title: "🎉 Payment Recovered!",
           description: `Customer completed payment via Razorpay link. Mandate restored!`,
         });
       }
     },
-    [toast]
+    [toast, triggerRefresh]
   );
 
   // Connect to SSE Endpoint
@@ -380,6 +416,17 @@ export default function App() {
                   <span className="hidden sm:inline">Shortcuts</span>
                   <kbd className="hidden lg:inline text-[9px] font-mono px-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-500 font-bold">?</kbd>
                 </button>
+
+                <a
+                  href="/RecoverMandate_Pitch_Deck.pptx"
+                  download="RecoverMandate_Pitch_Deck.pptx"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-600 dark:text-blue-400 transition-colors border border-blue-500/30"
+                  aria-label="Download Presentation Deck (PPTX)"
+                  title="Download Pitch Deck Presentation (.pptx)"
+                >
+                  <Download className="w-4 h-4 text-blue-500" />
+                  <span className="hidden md:inline font-bold">Pitch Deck (.pptx)</span>
+                </a>
               </div>
 
               {/* RecoverMandate Toggle (Dashboard Tab) */}
@@ -448,6 +495,8 @@ export default function App() {
                       onToggleMode={() => setIsRecoverMandateEnabled(true)}
                       refreshTrigger={refreshTrigger}
                       onNavigate={handleTabChange}
+                      confirmedEmail={targetCustomerEmail}
+                      onConfirmedEmailChange={handleTargetCustomerEmailChange}
                     />
                   )}
                   {activeTab === "mandates" && (

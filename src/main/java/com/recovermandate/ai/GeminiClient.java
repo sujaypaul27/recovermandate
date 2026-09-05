@@ -23,7 +23,8 @@ import java.util.Map;
 @Service
 public class GeminiClient {
 
-    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=";
+    @Value("${gemini.model:gemini-3.5-flash-lite}")
+    private String modelName;
 
     @Value("${gemini.api.key:}")
     private String apiKey;
@@ -35,9 +36,34 @@ public class GeminiClient {
     public GeminiClient(org.springframework.boot.web.client.RestTemplateBuilder restTemplateBuilder,
                         ObjectMapper objectMapper,
                         HeuristicFallbackEngine heuristicFallbackEngine) {
-        this.restTemplate = restTemplateBuilder.build();
+        RestTemplate rt = null;
+        if (restTemplateBuilder != null) {
+            try {
+                org.springframework.boot.web.client.RestTemplateBuilder builder = restTemplateBuilder
+                        .setConnectTimeout(java.time.Duration.ofMillis(5000));
+                if (builder != null) {
+                    builder = builder.setReadTimeout(java.time.Duration.ofMillis(25000));
+                }
+                if (builder != null) {
+                    rt = builder.build();
+                }
+            } catch (Exception e) {
+                log.warn("Could not configure custom timeouts on RestTemplateBuilder: {}", e.getMessage());
+            }
+            if (rt == null) {
+                rt = restTemplateBuilder.build();
+            }
+        }
+        this.restTemplate = (rt != null) ? rt : new RestTemplate();
         this.objectMapper = objectMapper;
         this.heuristicFallbackEngine = heuristicFallbackEngine;
+    }
+
+    public String getModelEndpoint() {
+        if (modelName != null && !modelName.isBlank()) {
+            return modelName.trim();
+        }
+        return "gemini-3.5-flash-lite";
     }
 
     /**
@@ -93,7 +119,7 @@ public class GeminiClient {
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
 
-            String url = GEMINI_API_URL + apiKey;
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + getModelEndpoint() + ":generateContent?key=" + apiKey;
             ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {

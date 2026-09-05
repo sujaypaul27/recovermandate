@@ -14,16 +14,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recovermandate.audit.AuditService;
-import com.recovermandate.entity.Customer;
-import com.recovermandate.entity.Merchant;
-import com.recovermandate.entity.PaymentEvent;
-import com.recovermandate.entity.Plan;
-import com.recovermandate.entity.Subscription;
-import com.recovermandate.repository.CustomerRepository;
-import com.recovermandate.repository.MerchantRepository;
-import com.recovermandate.repository.PaymentEventRepository;
-import com.recovermandate.repository.PlanRepository;
-import com.recovermandate.repository.SubscriptionRepository;
+import com.recovermandate.entity.*;
+import com.recovermandate.repository.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -74,10 +66,16 @@ class WebhookServiceTest {
     private com.recovermandate.repository.RecoveryActionRepository recoveryActionRepository;
 
     @Mock
+    private com.recovermandate.repository.FailureClassificationRepository failureClassificationRepository;
+
+    @Mock
     private com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
 
     @Mock
     private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+
+    @Mock
+    private com.recovermandate.client.RazorpayApiClient razorpayApiClient;
 
     private ObjectMapper objectMapper;
     private WebhookService webhookService;
@@ -99,8 +97,10 @@ class WebhookServiceTest {
                 objectMapper,
                 paymentLinkRepository,
                 recoveryActionRepository,
+                failureClassificationRepository,
                 retryScheduleRepository,
-                applicationEventPublisher
+                applicationEventPublisher,
+                razorpayApiClient
         );
     }
 
@@ -161,7 +161,47 @@ class WebhookServiceTest {
                 eq("SYSTEM"),
                 org.mockito.ArgumentMatchers.contains("pay_test_001")
         );
-        verify(failureClassificationService).classify(savedMock);
+        verify(failureClassificationService, org.mockito.Mockito.times(1)).classify(savedMock);
+    }
+
+    @Test
+    @DisplayName("Should invoke classify, scheduleRetries, and processFailure exactly once for payment.failed")
+    void handleVerifiedEvent_paymentFailed_invokesPipelineExactlyOnce() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_once_101",
+                        "amount": 49900,
+                        "error_code": "BAD_REQUEST_ERROR"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        PaymentEvent savedMock = PaymentEvent.builder()
+                .id(101L)
+                .razorpayPaymentId("pay_once_101")
+                .eventType("payment.failed")
+                .build();
+
+        FailureClassification classification = new FailureClassification();
+        classification.setId(1L);
+        classification.setCategory("insufficient_funds");
+        classification.setAutoRecoverable(false);
+
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenReturn(savedMock);
+        when(failureClassificationService.classify(savedMock)).thenReturn(classification);
+
+        webhookService.handleVerifiedEvent(payload);
+
+        verify(failureClassificationService, org.mockito.Mockito.times(1)).classify(savedMock);
+        verify(retrySchedulerService, org.mockito.Mockito.times(1)).scheduleRetries(savedMock, classification);
+        verify(recoveryActionService, org.mockito.Mockito.times(1)).processFailure(classification);
     }
 
     @Test
@@ -203,7 +243,7 @@ class WebhookServiceTest {
         Plan existingPlan = Plan.builder().id(7L).razorpayPlanId("plan_specific_999").amount(25000L).currency("INR").interval("monthly").build();
 
         when(merchantRepository.findByRazorpayAccountRef("acc_specific_123")).thenReturn(Optional.of(existingMerchant));
-        when(customerRepository.findByRazorpayCustomerId("cust_specific_456")).thenReturn(Optional.of(existingCustomer));
+        when(customerRepository.findByRazorpayCustomerId("cust_specific_456")).thenReturn(java.util.List.of(existingCustomer));
         when(planRepository.findByRazorpayPlanId("plan_specific_999")).thenReturn(Optional.of(existingPlan));
 
         Subscription savedSub = Subscription.builder()
@@ -272,7 +312,7 @@ class WebhookServiceTest {
         Merchant newMerchant = Merchant.builder().id(11L).name("Default Merchant").razorpayAccountRef("acc_brand_new").build();
         when(merchantRepository.save(any(Merchant.class))).thenReturn(newMerchant);
 
-        when(customerRepository.findByRazorpayCustomerId("cust_brand_new")).thenReturn(Optional.empty());
+        when(customerRepository.findByRazorpayCustomerId("cust_brand_new")).thenReturn(java.util.List.of());
         Customer newCustomer = Customer.builder().id(12L).merchant(newMerchant).name("Alice Smith").email("alice@example.com").razorpayCustomerId("cust_brand_new").build();
         when(customerRepository.save(any(Customer.class))).thenReturn(newCustomer);
 
@@ -692,5 +732,473 @@ class WebhookServiceTest {
         verify(retryScheduleRepository).save(pendingRetry);
         verify(auditService).log(eq("RETRY_SCHEDULE"), eq(202L), eq("RETRY_SKIPPED_SUBSCRIPTION_INACTIVE"), eq("SYSTEM"), contains("cancelled"));
         verify(auditService).log(eq("SUBSCRIPTION"), eq(999L), eq("SUBSCRIPTION_STATUS_UPDATED"), eq("SYSTEM"), contains("cancelled"));
+    }
+
+    @Test
+    @DisplayName("Should extract customer email and create mandate subscription from real Razorpay test payment webhook")
+    void handleVerifiedEvent_realRazorpayWebhookWithoutSubscription_extractsCustomerEmail() {
+        String payload = """
+                {
+                  "entity": "event",
+                  "account_id": "acc_real_razorpay",
+                  "event": "payment.failed",
+                  "contains": ["payment"],
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_real_test_001",
+                        "amount": 79900,
+                        "currency": "INR",
+                        "status": "failed",
+                        "email": "ssupport@gmail.com",
+                        "contact": "+919876543210",
+                        "notes": {
+                          "customer_email": "ssupport@gmail.com"
+                        },
+                        "error_code": "BAD_REQUEST_ERROR",
+                        "error_reason": "payment_failed_due_to_insufficient_funds"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_real_test_001")).thenReturn(Optional.empty());
+        when(merchantRepository.findByRazorpayAccountRef("acc_real_razorpay")).thenReturn(Optional.empty());
+        when(merchantRepository.save(any(Merchant.class))).thenAnswer(i -> i.getArgument(0));
+
+        when(customerRepository.findByRazorpayCustomerId(anyString())).thenReturn(java.util.List.of());
+        when(customerRepository.save(any(Customer.class))).thenAnswer(i -> {
+            Customer c = i.getArgument(0);
+            c.setId(101L);
+            return c;
+        });
+
+        when(planRepository.findByRazorpayPlanId(anyString())).thenReturn(Optional.empty());
+        when(planRepository.save(any(Plan.class))).thenAnswer(i -> i.getArgument(0));
+
+        when(subscriptionRepository.findByRazorpaySubscriptionId(anyString())).thenReturn(Optional.empty());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(i -> {
+            Subscription s = i.getArgument(0);
+            s.setId(201L);
+            return s;
+        });
+
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(301L);
+            return pe;
+        });
+
+        PaymentEvent event = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(event);
+        assertNotNull(event.getSubscription());
+        assertNotNull(event.getSubscription().getCustomer());
+        assertEquals("ssupport@gmail.com", event.getSubscription().getCustomer().getEmail());
+        assertEquals(79900L, event.getAmount());
+    }
+
+    @Test
+    @DisplayName("Should prioritize subscriber customer_email from subscription entity over merchant payment email")
+    void extractCustomerEmail_prioritizesSubscriptionCustomerEmailOverPaymentEmail() throws Exception {
+        String json = """
+                {
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_123",
+                        "email": "merchant.owner@business.com",
+                        "amount": 49900
+                      }
+                    },
+                    "subscription": {
+                      "entity": {
+                        "id": "sub_test_123",
+                        "customer_email": "actual.subscriber@gmail.com"
+                      }
+                    }
+                  }
+                }
+                """;
+        var root = objectMapper.readTree(json);
+        var paymentEntity = root.path("payload").path("payment").path("entity");
+        var subscriptionEntity = root.path("payload").path("subscription").path("entity");
+
+        String extracted = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+        assertEquals("actual.subscriber@gmail.com", extracted);
+    }
+
+    @Test
+    @DisplayName("Should prioritize customer object email from subscription entity over payment email")
+    void extractCustomerEmail_prioritizesSubscriptionCustomerObjectOverPaymentEmail() throws Exception {
+        String json = """
+                {
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_123",
+                        "email": "merchant.owner@business.com",
+                        "amount": 49900
+                      }
+                    },
+                    "subscription": {
+                      "entity": {
+                        "id": "sub_test_123",
+                        "customer": {
+                          "email": "actual.subscriber.customer@gmail.com",
+                          "name": "Jane Subscriber"
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+        var root = objectMapper.readTree(json);
+        var paymentEntity = root.path("payload").path("payment").path("entity");
+        var subscriptionEntity = root.path("payload").path("subscription").path("entity");
+
+        String extracted = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+        assertEquals("actual.subscriber.customer@gmail.com", extracted);
+    }
+
+    @Test
+    @DisplayName("Should prioritize customer entity email over payment email")
+    void extractCustomerEmail_prioritizesCustomerEntityOverPaymentEmail() throws Exception {
+        String json = """
+                {
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_123",
+                        "email": "merchant.owner@business.com"
+                      }
+                    },
+                    "customer": {
+                      "entity": {
+                        "id": "cust_123",
+                        "email": "subscriber.direct@domain.com"
+                      }
+                    }
+                  }
+                }
+                """;
+        var root = objectMapper.readTree(json);
+        var paymentEntity = root.path("payload").path("payment").path("entity");
+        var subscriptionEntity = root.path("payload").path("subscription").path("entity");
+
+        String extracted = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+        assertEquals("subscriber.direct@domain.com", extracted);
+    }
+
+    @Test
+    @DisplayName("Should fall back to payment email when no subscription or customer entity email exists")
+    void extractCustomerEmail_fallsBackToPaymentEmailWhenNoSubscriptionEmail() throws Exception {
+        String json = """
+                {
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_123",
+                        "email": "direct.payer@domain.com"
+                      }
+                    }
+                  }
+                }
+                """;
+        var root = objectMapper.readTree(json);
+        var paymentEntity = root.path("payload").path("payment").path("entity");
+        var subscriptionEntity = root.path("payload").path("subscription").path("entity");
+
+        String extracted = WebhookService.extractCustomerEmail(root, paymentEntity, subscriptionEntity);
+        assertEquals("direct.payer@domain.com", extracted);
+    }
+
+    @Test
+    @DisplayName("Should create distinct customer and not mutate existing customer when a different email is received")
+    void handleVerifiedEvent_createsDistinctCustomersPerEmail() {
+        Customer existingCustomer = Customer.builder()
+                .id(1L)
+                .name("Alice First")
+                .email("alice.first@example.com")
+                .razorpayCustomerId("cust_shared_id")
+                .build();
+
+        when(customerRepository.findByMerchantAndEmailOrderByIdDesc(any(), eq("bob.second@example.com"))).thenReturn(java.util.List.of());
+        when(customerRepository.findByEmailOrderByIdDesc("bob.second@example.com")).thenReturn(java.util.List.of());
+        when(customerRepository.findByRazorpayCustomerId("cust_shared_id")).thenReturn(java.util.List.of(existingCustomer));
+
+        Customer newBobCustomer = Customer.builder()
+                .id(2L)
+                .name("Bob Second")
+                .email("bob.second@example.com")
+                .razorpayCustomerId("cust_shared_id")
+                .build();
+        when(customerRepository.save(argThat(c -> "bob.second@example.com".equals(c.getEmail())))).thenReturn(newBobCustomer);
+
+        String payload = """
+                {
+                  "entity": "event",
+                  "account_id": "acc_real_razorpay",
+                  "event": "payment.failed",
+                  "contains": ["payment", "subscription"],
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_002",
+                        "amount": 49900,
+                        "currency": "INR",
+                        "customer_id": "cust_shared_id",
+                        "email": "bob.second@example.com"
+                      }
+                    },
+                    "subscription": {
+                      "entity": {
+                        "id": "sub_test_002",
+                        "customer_email": "bob.second@example.com"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_test_002")).thenReturn(Optional.empty());
+        when(merchantRepository.findByRazorpayAccountRef(anyString())).thenReturn(Optional.of(Merchant.builder().id(1L).name("M").build()));
+        when(planRepository.findByRazorpayPlanId(anyString())).thenReturn(Optional.of(Plan.builder().id(1L).build()));
+        when(subscriptionRepository.findByRazorpaySubscriptionId("sub_test_002")).thenReturn(Optional.empty());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(i -> i.getArgument(0));
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(301L);
+            return pe;
+        });
+
+        PaymentEvent event = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(event);
+        assertNotNull(event.getSubscription().getCustomer());
+        assertEquals("bob.second@example.com", event.getSubscription().getCustomer().getEmail());
+        // Verify that existing Alice record was NOT mutated
+        assertEquals("alice.first@example.com", existingCustomer.getEmail());
+    }
+
+    @Test
+    @DisplayName("Should select most recent customer when duplicate customer rows exist for the same email without throwing")
+    void handleVerifiedEvent_withDuplicateCustomers_picksMostRecent() {
+        Customer olderCustomer = Customer.builder().id(10L).email("duplicate@example.com").name("Old Name").build();
+        Customer newerCustomer = Customer.builder().id(20L).email("duplicate@example.com").name("Newer Name").build();
+
+        when(customerRepository.findByMerchantAndEmailOrderByIdDesc(any(), eq("duplicate@example.com")))
+                .thenReturn(java.util.List.of(newerCustomer, olderCustomer));
+
+        String payload = """
+                {
+                  "entity": "event",
+                  "account_id": "acc_real_razorpay",
+                  "event": "payment.failed",
+                  "contains": ["payment"],
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_test_dup_001",
+                        "amount": 10000,
+                        "currency": "INR",
+                        "email": "duplicate@example.com"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_test_dup_001")).thenReturn(Optional.empty());
+        when(merchantRepository.findByRazorpayAccountRef(anyString())).thenReturn(Optional.of(Merchant.builder().id(1L).name("M").build()));
+        when(planRepository.findByRazorpayPlanId(anyString())).thenReturn(Optional.of(Plan.builder().id(1L).build()));
+        when(subscriptionRepository.findByRazorpaySubscriptionId(anyString())).thenReturn(Optional.empty());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(i -> i.getArgument(0));
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(401L);
+            return pe;
+        });
+
+        PaymentEvent event = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(event);
+        assertNotNull(event.getSubscription().getCustomer());
+        assertEquals(20L, event.getSubscription().getCustomer().getId());
+        assertEquals("duplicate@example.com", event.getSubscription().getCustomer().getEmail());
+    }
+
+    @Test
+    @DisplayName("Should detect placeholder and void emails correctly")
+    void isPlaceholderOrVoidEmail_detectsVoidEmails() {
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("void@razorpay.com"));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("test@razorpay.com"));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("void@customdomain.com"));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("dummy@domain.com"));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("noreply@company.com"));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail(null));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("   "));
+        org.junit.jupiter.api.Assertions.assertTrue(WebhookService.isPlaceholderOrVoidEmail("null"));
+
+        org.junit.jupiter.api.Assertions.assertFalse(WebhookService.isPlaceholderOrVoidEmail("rsiv.ece2024@rmd.ac.in"));
+        org.junit.jupiter.api.Assertions.assertFalse(WebhookService.isPlaceholderOrVoidEmail("sujaypaul2711@gmail.com"));
+        org.junit.jupiter.api.Assertions.assertFalse(WebhookService.isPlaceholderOrVoidEmail("customer@example.com"));
+    }
+
+    @Test
+    @DisplayName("Should resolve original customer email when payment.failed payload contains void@razorpay.com on a payment link")
+    void handleVerifiedEvent_withVoidEmailOnPaymentLink_resolvesOriginalCustomer() {
+        Customer realCustomer = Customer.builder()
+                .id(101L)
+                .name("Rsiv ece2024")
+                .email("rsiv.ece2024@rmd.ac.in")
+                .razorpayCustomerId("cust_rsiv_101")
+                .build();
+
+        Subscription realSub = Subscription.builder()
+                .id(201L)
+                .razorpaySubscriptionId("sub_orig_mandate_001")
+                .customer(realCustomer)
+                .status("active")
+                .build();
+
+        PaymentEvent origEvent = PaymentEvent.builder()
+                .id(301L)
+                .razorpayPaymentId("pay_orig_001")
+                .subscription(realSub)
+                .amount(49900L)
+                .build();
+
+        FailureClassification fc = FailureClassification.builder()
+                .id(401L)
+                .paymentEvent(origEvent)
+                .category("insufficient_funds")
+                .autoRecoverable(false)
+                .build();
+
+        RecoveryAction ra = RecoveryAction.builder()
+                .id(501L)
+                .failureClassification(fc)
+                .status("DISPATCHED")
+                .build();
+
+        PaymentLink pl = PaymentLink.builder()
+                .id(601L)
+                .razorpayLinkId("plink_Q2wE3r4t5y")
+                .shortUrl("https://rzp.io/rzp/abc123")
+                .recoveryAction(ra)
+                .amount(49900L)
+                .status("CREATED")
+                .build();
+
+        when(paymentLinkRepository.findByRazorpayLinkId("plink_Q2wE3r4t5y")).thenReturn(Optional.of(pl));
+
+        String payload = """
+                {
+                  "entity": "event",
+                  "account_id": "acc_live_123",
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_declined_attempt_999",
+                        "amount": 49900,
+                        "currency": "INR",
+                        "status": "failed",
+                        "order_id": "order_Q2wE3r4t5yOrder",
+                        "payment_link_id": "plink_Q2wE3r4t5y",
+                        "email": "void@razorpay.com",
+                        "error_code": "BAD_REQUEST_ERROR",
+                        "error_description": "Payment was declined by the bank"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_declined_attempt_999")).thenReturn(Optional.empty());
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(701L);
+            return pe;
+        });
+
+        PaymentEvent processedEvent = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(processedEvent);
+        assertNotNull(processedEvent.getSubscription());
+        assertNotNull(processedEvent.getSubscription().getCustomer());
+        assertEquals("rsiv.ece2024@rmd.ac.in", processedEvent.getSubscription().getCustomer().getEmail());
+        assertEquals("Rsiv ece2024", processedEvent.getSubscription().getCustomer().getName());
+    }
+
+    @Test
+    @DisplayName("Should resolve original customer via reference_id when payment.failed has void@razorpay.com")
+    void handleVerifiedEvent_withVoidEmailAndReferenceId_resolvesOriginalCustomer() {
+        Customer realCustomer = Customer.builder()
+                .id(102L)
+                .name("Sujaypaul2711")
+                .email("sujaypaul2711@gmail.com")
+                .razorpayCustomerId("cust_sujay_102")
+                .build();
+
+        Subscription realSub = Subscription.builder()
+                .id(202L)
+                .razorpaySubscriptionId("sub_sujay_002")
+                .customer(realCustomer)
+                .status("active")
+                .build();
+
+        PaymentEvent origEvent = PaymentEvent.builder()
+                .id(302L)
+                .razorpayPaymentId("pay_TwP6eyEHCg8c0p")
+                .subscription(realSub)
+                .amount(49900L)
+                .build();
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_TwP6eyEHCg8c0p")).thenReturn(Optional.of(origEvent));
+
+        String payload = """
+                {
+                  "entity": "event",
+                  "account_id": "acc_live_123",
+                  "event": "payment.failed",
+                  "payload": {
+                    "payment": {
+                      "entity": {
+                        "id": "pay_rejected_link_888",
+                        "amount": 49900,
+                        "currency": "INR",
+                        "status": "failed",
+                        "email": "void@razorpay.com",
+                        "notes": {
+                          "reference_id": "rec_link_pay_TwP6eyEHCg8c0p_987654"
+                        },
+                        "error_code": "BAD_REQUEST_ERROR"
+                      }
+                    }
+                  }
+                }
+                """;
+
+        when(paymentEventRepository.findByRazorpayPaymentId("pay_rejected_link_888")).thenReturn(Optional.empty());
+        when(paymentEventRepository.save(any(PaymentEvent.class))).thenAnswer(i -> {
+            PaymentEvent pe = i.getArgument(0);
+            pe.setId(702L);
+            return pe;
+        });
+
+        PaymentEvent processedEvent = webhookService.handleVerifiedEvent(payload);
+
+        assertNotNull(processedEvent);
+        assertNotNull(processedEvent.getSubscription());
+        assertNotNull(processedEvent.getSubscription().getCustomer());
+        assertEquals("sujaypaul2711@gmail.com", processedEvent.getSubscription().getCustomer().getEmail());
+        assertEquals("Sujaypaul2711", processedEvent.getSubscription().getCustomer().getName());
     }
 }

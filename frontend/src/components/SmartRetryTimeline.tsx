@@ -32,6 +32,13 @@ export function SmartRetryTimeline({
   amount,
   onUpdate,
 }: SmartRetryTimelineProps) {
+  // Deduplicate schedules by attemptNumber to guarantee clean rendering
+  const uniqueSchedules = Array.from(
+    new Map(
+      (schedules || []).map((s) => [s.attemptNumber ?? s.id, s])
+    ).values()
+  ).sort((a, b) => (a.attemptNumber || 0) - (b.attemptNumber || 0));
+
   const [actingId, setActingId] = useState<number | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmTrigger, setConfirmTrigger] = useState<{
@@ -163,7 +170,7 @@ export function SmartRetryTimeline({
             <span className="text-[9px] text-slate-400 font-sans italic hidden sm:inline">(Internal Ref)</span>
           </span>
           <span className="text-[11px] text-slate-400 font-mono">
-            · {schedules.length} Retry Windows
+            · {uniqueSchedules.length} Retry Windows
           </span>
         </div>
       </div>
@@ -177,13 +184,13 @@ export function SmartRetryTimeline({
         </div>
       )}
 
-      {schedules.length === 0 ? (
+      {uniqueSchedules.length === 0 ? (
         <div className="py-6 text-center text-xs text-slate-400 font-medium">
           No automated retry schedule records associated with this payment event.
         </div>
       ) : (
         <div className="space-y-2.5">
-          {schedules.map((schedule, idx) => {
+          {uniqueSchedules.map((schedule, idx) => {
             const isPending = schedule.status === "PENDING";
             const isActing = actingId === schedule.id;
 

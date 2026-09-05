@@ -27,7 +27,6 @@ import java.util.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/demo")
-@RequiredArgsConstructor
 public class DemoController {
 
     private final WebhookService webhookService;
@@ -40,11 +39,50 @@ public class DemoController {
     private final com.recovermandate.repository.DispatchLogRepository dispatchLogRepository;
     private final com.recovermandate.repository.AuditLogRepository auditLogRepository;
     private final com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
+    private final com.recovermandate.repository.SubscriptionRepository subscriptionRepository;
+    private final com.recovermandate.repository.CustomerRepository customerRepository;
+    private final com.recovermandate.repository.PlanRepository planRepository;
+    private final com.recovermandate.repository.MerchantRepository merchantRepository;
     private final com.recovermandate.audit.AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    public DemoController(
+            WebhookService webhookService,
+            RecoveryActionService recoveryActionService,
+            PaymentLinkRepository paymentLinkRepository,
+            RecoveryActionRepository recoveryActionRepository,
+            com.recovermandate.repository.FailureClassificationRepository failureClassificationRepository,
+            com.recovermandate.repository.PaymentEventRepository paymentEventRepository,
+            com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository,
+            com.recovermandate.repository.DispatchLogRepository dispatchLogRepository,
+            com.recovermandate.repository.AuditLogRepository auditLogRepository,
+            com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository,
+            com.recovermandate.repository.SubscriptionRepository subscriptionRepository,
+            com.recovermandate.repository.CustomerRepository customerRepository,
+            com.recovermandate.repository.PlanRepository planRepository,
+            com.recovermandate.repository.MerchantRepository merchantRepository,
+            com.recovermandate.audit.AuditService auditService,
+            ObjectMapper objectMapper,
+            java.util.Optional<org.springframework.jdbc.core.JdbcTemplate> jdbcTemplate) {
+        this.webhookService = webhookService;
+        this.recoveryActionService = recoveryActionService;
+        this.paymentLinkRepository = paymentLinkRepository;
+        this.recoveryActionRepository = recoveryActionRepository;
+        this.failureClassificationRepository = failureClassificationRepository;
+        this.paymentEventRepository = paymentEventRepository;
+        this.retryScheduleRepository = retryScheduleRepository;
+        this.dispatchLogRepository = dispatchLogRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.webhookDlqRepository = webhookDlqRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.customerRepository = customerRepository;
+        this.planRepository = planRepository;
+        this.merchantRepository = merchantRepository;
+        this.auditService = auditService;
+        this.objectMapper = objectMapper;
+        this.jdbcTemplate = jdbcTemplate != null ? jdbcTemplate.orElse(null) : null;
+    }
 
     private static final List<String> DEMO_CATEGORIES = List.of(
             "insufficient_funds",
@@ -78,10 +116,9 @@ public class DemoController {
                 ? request.getCustomerName()
                 : DEMO_NAMES.get(new Random().nextInt(DEMO_NAMES.size()));
 
-        String randomId = UUID.randomUUID().toString().substring(0, 6);
         String customerEmail = (request != null && request.getCustomerEmail() != null && !request.getCustomerEmail().isBlank())
                 ? request.getCustomerEmail().trim()
-                : "demo.customer+" + randomId + "@example.com";
+                : "sujaypaul2711@gmail.com";
 
         String bankCode = (request != null && request.getBankCode() != null && !request.getBankCode().isBlank())
                 ? request.getBankCode().toUpperCase(Locale.ROOT)
@@ -102,7 +139,7 @@ public class DemoController {
                 category
         );
 
-        PaymentEvent event = webhookService.handleVerifiedEvent(payloadJson);
+        PaymentEvent event = webhookService.handleVerifiedEvent(payloadJson, true);
 
         // Find the recovery action created for this event if applicable
         Long actionId = null;
@@ -171,7 +208,7 @@ public class DemoController {
         }
 
         String payloadJson = buildRazorpayPaymentLinkPaidPayload(targetLinkId, targetAmount);
-        PaymentEvent resultEvent = webhookService.handleVerifiedEvent(payloadJson);
+        PaymentEvent resultEvent = webhookService.handleVerifiedEvent(payloadJson, true);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("status", "SUCCESS");
@@ -220,7 +257,7 @@ public class DemoController {
 
                     // 4. Simulate customer paying
                     String paidPayload = buildRazorpayPaymentLinkPaidPayload(pl.getRazorpayLinkId(), pl.getAmount());
-                    webhookService.handleVerifiedEvent(paidPayload);
+                    webhookService.handleVerifiedEvent(paidPayload, true);
                     flowReport.put("step4_revenue_recovered", Map.of(
                             "status", "RECOVERED",
                             "razorpayLinkId", pl.getRazorpayLinkId(),
@@ -238,17 +275,17 @@ public class DemoController {
         return ResponseEntity.ok(flowReport);
     }
 
-    @PostMapping("/reset-ledger")
     @org.springframework.transaction.annotation.Transactional
+    @PostMapping("/reset-ledger")
     public ResponseEntity<Map<String, Object>> resetLedger() {
         log.info("Executing demo clean reset: wiping test operational tables & resetting audit hash chain to GENESIS...");
         
         boolean truncated = false;
         if (jdbcTemplate != null) {
             try {
-                jdbcTemplate.execute("TRUNCATE TABLE dispatch_logs, payment_links, retry_schedules, recovery_actions, failure_classifications, webhook_dlq, audit_logs, payment_events CASCADE");
+                jdbcTemplate.execute("TRUNCATE TABLE dispatch_logs, payment_links, retry_schedules, recovery_actions, failure_classifications, webhook_dlq, audit_logs, payment_events, subscriptions, customers CASCADE;");
                 truncated = true;
-                log.info("Successfully executed TRUNCATE TABLE ... CASCADE across all operational tables.");
+                log.info("Successfully executed TRUNCATE TABLE ... CASCADE across operational and customer tables.");
             } catch (Exception e) {
                 log.warn("TRUNCATE CASCADE failed (falling back to ordered batch deletes): {}", e.getMessage());
             }
@@ -270,8 +307,24 @@ public class DemoController {
             if (webhookDlqRepository != null) webhookDlqRepository.deleteAllInBatch();
             // 7. audit_logs (standalone)
             if (auditLogRepository != null) auditLogRepository.deleteAllInBatch();
-            // 8. payment_events (parent, deleted last)
+            // 8. payment_events (references subscriptions)
             if (paymentEventRepository != null) paymentEventRepository.deleteAllInBatch();
+            // 9. subscriptions (references customers, plans, merchants)
+            if (subscriptionRepository != null) {
+                try {
+                    subscriptionRepository.deleteAllInBatch();
+                } catch (Exception e) {
+                    log.warn("Subscriptions batch delete: {}", e.getMessage());
+                }
+            }
+            // 10. customers (references merchants)
+            if (customerRepository != null) {
+                try {
+                    customerRepository.deleteAllInBatch();
+                } catch (Exception e) {
+                    log.warn("Customers batch delete: {}", e.getMessage());
+                }
+            }
         }
 
         if (auditService != null) {

@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -66,6 +67,18 @@ class DemoControllerTest {
     private com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
 
     @MockBean
+    private com.recovermandate.repository.SubscriptionRepository subscriptionRepository;
+
+    @MockBean
+    private com.recovermandate.repository.CustomerRepository customerRepository;
+
+    @MockBean
+    private com.recovermandate.repository.PlanRepository planRepository;
+
+    @MockBean
+    private com.recovermandate.repository.MerchantRepository merchantRepository;
+
+    @MockBean
     private com.recovermandate.audit.AuditService auditService;
 
     @Test
@@ -79,6 +92,7 @@ class DemoControllerTest {
                 .build();
 
         when(webhookService.handleVerifiedEvent(anyString())).thenReturn(fakeEvent);
+        when(webhookService.handleVerifiedEvent(anyString(), anyBoolean())).thenReturn(fakeEvent);
 
         DemoFailureSimulationRequest request = DemoFailureSimulationRequest.builder()
                 .category("insufficient_funds")
@@ -106,6 +120,7 @@ class DemoControllerTest {
                 .build();
 
         when(webhookService.handleVerifiedEvent(anyString())).thenReturn(paidEvent);
+        when(webhookService.handleVerifiedEvent(anyString(), anyBoolean())).thenReturn(paidEvent);
 
         mockMvc.perform(post("/api/demo/simulate-payment-paid?paymentLinkId=plink_demo_123&amount=49900"))
                 .andExpect(status().isOk())

@@ -117,6 +117,14 @@ export function CustomerCheckoutPage({
     failureCategory: "insufficient_funds",
   };
 
+  const isLiveLink = Boolean(
+    details?.shortUrl &&
+    details.shortUrl.includes("rzp.io") &&
+    !linkId.startsWith("plink_sim_") &&
+    !linkId.startsWith("plink_preview_")
+  );
+  const isDemoCheckout = !isLiveLink;
+
   return (
     <div className="min-h-screen bg-[#02042B] text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans">
       {/* Top Bar / Navigation */}
@@ -141,6 +149,21 @@ export function CustomerCheckoutPage({
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-xl rounded-2xl bg-[#08182D] border border-[#3395FF]/30 shadow-2xl overflow-hidden"
       >
+        {/* Demo Sandbox Top Banner */}
+        {isDemoCheckout && (
+          <div className="bg-gradient-to-r from-amber-500/20 via-indigo-500/15 to-blue-500/20 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span className="font-bold text-amber-300">🧪 Demo Sandbox Checkout</span>
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-300 hidden sm:inline">No Real Payment Will Be Processed</span>
+            </div>
+            <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold shrink-0">
+              Simulated Sandbox
+            </span>
+          </div>
+        )}
+
         {/* Checkout Header */}
         <div className="p-6 bg-[#0C2340] border-b border-[#3395FF]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -152,9 +175,15 @@ export function CustomerCheckoutPage({
                 <h1 className="text-base font-extrabold text-white tracking-wide">
                   {safeDetails.merchantName}
                 </h1>
-                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[9px] font-bold">
-                  ✓ Verified
-                </Badge>
+                {isDemoCheckout ? (
+                  <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[9px] font-bold">
+                    🧪 Demo Sandbox
+                  </Badge>
+                ) : (
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[9px] font-bold">
+                    ✓ Verified
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-slate-300 font-medium mt-0.5">
                 {safeDetails.planName}
@@ -301,15 +330,23 @@ export function CustomerCheckoutPage({
                 <Button
                   onClick={handlePay}
                   disabled={paying}
-                  className="w-full h-12 bg-gradient-to-r from-[#3395FF] to-blue-600 hover:from-[#2582eb] hover:to-blue-500 text-white font-extrabold text-sm gap-2 shadow-xl shadow-[#3395FF]/30 rounded-xl"
+                  className="w-full h-12 bg-gradient-to-r from-[#3395FF] to-blue-600 hover:from-[#2582eb] hover:to-blue-500 text-white font-extrabold text-sm gap-2 shadow-xl shadow-[#3395FF]/30 rounded-xl cursor-pointer"
                 >
                   <Zap className={`w-4 h-4 text-amber-300 ${paying ? "animate-spin" : ""}`} />
-                  {paying ? "Authorizing Payment Gateway..." : `Simulate Instant Payment (${formatINR(safeDetails.amount)})`}
+                  {paying
+                    ? "Authorizing Payment Gateway..."
+                    : isDemoCheckout
+                    ? `🧪 Simulate Demo Payment (${formatINR(safeDetails.amount)})`
+                    : `Pay Overdue ${formatINR(safeDetails.amount)} via Razorpay Secure Checkout`}
                 </Button>
 
                 <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#3395FF]" />
-                  <span>Powered by Razorpay Payment Gateway & Auto-Recovery Engine</span>
+                  <span>
+                    {isDemoCheckout
+                      ? "RecoverMandate Sandbox Mode • Safe Simulated Settlement"
+                      : "Powered by Razorpay Payment Gateway & Auto-Recovery Engine"}
+                  </span>
                 </div>
               </div>
             </div>

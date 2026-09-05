@@ -57,4 +57,8 @@ public class RetrySchedule {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "is_demo_data", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean isDemoData = false;
 }

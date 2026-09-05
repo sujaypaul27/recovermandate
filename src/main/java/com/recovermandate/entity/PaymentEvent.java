@@ -51,4 +51,8 @@ public class PaymentEvent {
 
     @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
+
+    @Column(name = "is_demo_data", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean isDemoData = false;
 }
