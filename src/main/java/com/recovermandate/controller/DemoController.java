@@ -1,6 +1,5 @@
 package com.recovermandate.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recovermandate.dto.DemoFailureSimulationRequest;
 import com.recovermandate.dto.DemoFailureSimulationResponse;
 import com.recovermandate.entity.PaymentEvent;
@@ -10,13 +9,11 @@ import com.recovermandate.repository.PaymentLinkRepository;
 import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.service.RecoveryActionService;
 import com.recovermandate.service.WebhookService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /**
@@ -41,10 +38,7 @@ public class DemoController {
     private final com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository;
     private final com.recovermandate.repository.SubscriptionRepository subscriptionRepository;
     private final com.recovermandate.repository.CustomerRepository customerRepository;
-    private final com.recovermandate.repository.PlanRepository planRepository;
-    private final com.recovermandate.repository.MerchantRepository merchantRepository;
     private final com.recovermandate.audit.AuditService auditService;
-    private final ObjectMapper objectMapper;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public DemoController(
@@ -60,10 +54,7 @@ public class DemoController {
             com.recovermandate.repository.WebhookDlqRepository webhookDlqRepository,
             com.recovermandate.repository.SubscriptionRepository subscriptionRepository,
             com.recovermandate.repository.CustomerRepository customerRepository,
-            com.recovermandate.repository.PlanRepository planRepository,
-            com.recovermandate.repository.MerchantRepository merchantRepository,
             com.recovermandate.audit.AuditService auditService,
-            ObjectMapper objectMapper,
             java.util.Optional<org.springframework.jdbc.core.JdbcTemplate> jdbcTemplate) {
         this.webhookService = webhookService;
         this.recoveryActionService = recoveryActionService;
@@ -77,10 +68,7 @@ public class DemoController {
         this.webhookDlqRepository = webhookDlqRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.customerRepository = customerRepository;
-        this.planRepository = planRepository;
-        this.merchantRepository = merchantRepository;
         this.auditService = auditService;
-        this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate != null ? jdbcTemplate.orElse(null) : null;
     }
 

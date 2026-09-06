@@ -8,7 +8,6 @@ import com.recovermandate.entity.FailureClassification;
 import com.recovermandate.entity.PaymentEvent;
 import com.recovermandate.entity.PaymentLink;
 import com.recovermandate.entity.RecoveryAction;
-import com.recovermandate.entity.Subscription;
 import com.recovermandate.repository.RecoveryActionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 

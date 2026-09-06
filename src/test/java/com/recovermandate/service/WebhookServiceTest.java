@@ -17,7 +17,6 @@ import com.recovermandate.audit.AuditService;
 import com.recovermandate.entity.*;
 import com.recovermandate.repository.*;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

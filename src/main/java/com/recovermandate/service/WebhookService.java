@@ -50,6 +50,7 @@ public class WebhookService {
     private final RecoveryActionRepository recoveryActionRepository;
     private final com.recovermandate.repository.FailureClassificationRepository failureClassificationRepository;
     private final com.recovermandate.repository.RetryScheduleRepository retryScheduleRepository;
+    @SuppressWarnings("unused")
     private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
     private final com.recovermandate.client.RazorpayApiClient razorpayApiClient;
 
@@ -374,6 +375,7 @@ public class WebhookService {
         return null;
     }
 
+    @SuppressWarnings("unused")
     private static class ResolvedCustomerContext {
         private Customer customer;
         private Subscription subscription;

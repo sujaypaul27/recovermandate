@@ -1,6 +1,5 @@
 package com.recovermandate.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recovermandate.audit.AuditService;
 import com.recovermandate.dto.CheckoutDetailsDto;
 import com.recovermandate.entity.Customer;
@@ -9,7 +8,6 @@ import com.recovermandate.entity.PaymentLink;
 import com.recovermandate.entity.RecoveryAction;
 import com.recovermandate.entity.RetrySchedule;
 import com.recovermandate.entity.Subscription;
-import com.recovermandate.repository.PaymentEventRepository;
 import com.recovermandate.repository.PaymentLinkRepository;
 import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.repository.RetryScheduleRepository;
@@ -44,7 +42,6 @@ public class CheckoutController {
 
     private final PaymentLinkRepository paymentLinkRepository;
     private final RecoveryActionRepository recoveryActionRepository;
-    private final PaymentEventRepository paymentEventRepository;
     private final RetryScheduleRepository retryScheduleRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final MerchantSettingsService merchantSettingsService;

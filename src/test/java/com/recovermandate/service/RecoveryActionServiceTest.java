@@ -336,7 +336,6 @@ class RecoveryActionServiceTest {
     @Test
     void testBatchApprove_ProcessesAllWithIsolation() {
         RecoveryAction action1 = RecoveryAction.builder().id(1L).status("DRAFTED").build();
-        RecoveryAction action2 = RecoveryAction.builder().id(2L).status("DRAFTED").build();
 
         when(recoveryActionRepository.findById(1L)).thenReturn(Optional.of(action1));
         when(recoveryActionRepository.findById(2L)).thenThrow(new RuntimeException("DB Timeout on item 2"));

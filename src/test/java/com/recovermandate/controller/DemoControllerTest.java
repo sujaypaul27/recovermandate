@@ -16,9 +16,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -71,12 +68,6 @@ class DemoControllerTest {
 
     @MockBean
     private com.recovermandate.repository.CustomerRepository customerRepository;
-
-    @MockBean
-    private com.recovermandate.repository.PlanRepository planRepository;
-
-    @MockBean
-    private com.recovermandate.repository.MerchantRepository merchantRepository;
 
     @MockBean
     private com.recovermandate.audit.AuditService auditService;

@@ -7,7 +7,6 @@ import com.recovermandate.entity.PaymentEvent;
 import com.recovermandate.entity.PaymentLink;
 import com.recovermandate.entity.RecoveryAction;
 import com.recovermandate.entity.Subscription;
-import com.recovermandate.repository.PaymentEventRepository;
 import com.recovermandate.repository.PaymentLinkRepository;
 import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.repository.RetryScheduleRepository;
@@ -46,8 +45,6 @@ class CheckoutControllerTest {
     @MockBean
     private RecoveryActionRepository recoveryActionRepository;
 
-    @MockBean
-    private PaymentEventRepository paymentEventRepository;
 
     @MockBean
     private RetryScheduleRepository retryScheduleRepository;
