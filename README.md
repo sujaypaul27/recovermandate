@@ -10,7 +10,7 @@ Today, when a customer's recurring subscription or mandate debit fails, the paym
 
 ---
 
-## 2. AI Judgment: How This System Uses AI
+## 2.  How This System Uses AI
 
 Deterministic code owns every money-moving decision in RecoverMandate — retry scheduling, failure classification, escalation routing, and payment link dispatch are all executed by rule-based Java services with no AI in the loop. **Gemini is used for exactly one thing: drafting the wording of customer-facing recovery emails. No AI-generated draft is ever sent to a customer without passing a deterministic validation gate and receiving explicit human (or merchant Auto-Pilot policy) approval.** The `GeminiClient` sends only non-PII context (amount, currency, failure category, days since failure) to the Gemini API; customer names and emails never enter the prompt (Decision 3 in PROJECT_CONTEXT.md — PII minimization at the API boundary).
 
