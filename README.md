@@ -2,6 +2,42 @@
 
 > **Autonomous AI-powered recovery platform for failed recurring payments and subscriptions on Indian banking rails.**
 
+## Live Demo
+
+A live evaluation deployment of RecoverMandate is accessible at [https://recovermandate.vercel.app](https://recovermandate.vercel.app). It runs as a self-contained sandbox on free-tier hosting (frontend on Vercel, backend Docker service on Render, and PostgreSQL on Supabase) with Demo Mode on, so some production integrations are simulated.
+
+### Before You Try It
+
+* **Instance Sleep & Cold Starts:** The backend runs on a free plan and sleeps after about 15 minutes without traffic. The first load can take 30 to 60 seconds while the container boots. While it sleeps, background schedulers are paused and the live-update stream reconnects automatically after the page wakes it.
+* **Shared Database State:** All visitors share one database. Anyone can use the demo controls, including resetting the ledger, so data can disappear at any time. Do not enter real customer, bank, or payment data.
+
+### How to Try the Demo
+
+1. **Open the Dashboard:** Navigate to the **Overview & ROI** tab to view real-time recovery metrics and the top **Live Demo Simulator** bar.
+2. **Run End-to-End Recovery:** Click the **"🚀 Full 5-Stage Recovery (1-Click)"** button to watch a simulated mandate failure step through ingestion, classification, AI drafting, link dispatch, and revenue recovery.
+3. **Simulate a Specific Failure Category:** Select any scenario preset (such as **"Insufficient Funds"**, **"Technical Decline"**, or **"Expired Mandate"**) and click **"1. Simulate Failure (Step 1-3)"**.
+4. **Review & Approve in the Queue:** Navigate to the **AI Approval Queue** tab, inspect the generated AI dunning draft, verify safety checks, and click **"Approve & Dispatch Link"**.
+5. **Complete Customer Sandbox Checkout:** In the simulator banner or failure record, open the generated payment link (which routes to the hosted **Demo Sandbox Checkout** page) and click **"🧪 Simulate Demo Payment (₹499.00)"**.
+6. **Verify the Cryptographic Audit Trail:** Switch to the **Audit Trail** tab to view the tamper-evident SHA-256 hash chain and click **"Verify Chain Integrity"**.
+
+### What Works in the Live Demo vs. What is Simulated or Unavailable
+
+| Feature | Status in Live Demo | Why | How to Enable in Your Own Clone |
+|:---|:---|:---|:---|
+| Simulated failure ingestion and full recovery flow | Works | Demo Mode is on (`DEMO_ENABLED=true`) and exposes the simulator | Works out of the box locally. |
+| AI-drafted recovery emails (Gemini) | Works | A Gemini API key is configured; a rule-based fallback and a `"HEURISTIC DRAFT"` badge appear if Gemini is unavailable or rate-limited | Set `GEMINI_API_KEY` from Google AI Studio. |
+| Deterministic classification, validation gate, audit ledger with SHA-256 chain | Works | Runs entirely inside the backend | Works out of the box. |
+| Smart retry engine | Simulated | Retries run every minute against an internal bank-health model, with no real mandate re-presentment | Needs a real Razorpay recurring-charge integration with valid subscription IDs. |
+| Bank / NPCI health | Internal data only | It is computed from the app's own recent failure events, not from an external NPCI feed | Works automatically from ingested failures. |
+| Real email delivery | Not available (simulated) | `MAIL_ENABLED=false`, so no email leaves the system. Dispatch is recorded as sent with a `"(SIMULATED)"` tag in the Audit Trail and the action moves to `DISPATCHED`. Free hosts may also block outbound SMTP, and Gmail needs an app password | Set `MAIL_ENABLED=true` plus `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` (for Gmail: 2-Step Verification on and a 16-character App Password), and optionally `MAIL_FROM` and `MAIL_FROM_NAME`. |
+| Real Razorpay payment links and checkout | Not available (sandbox) | `RAZORPAY_DRY_RUN=true` and no Razorpay keys, so payment links point to the built-in "Demo Sandbox Checkout" and no real card, UPI, or netbanking payment can be made | Set `RAZORPAY_DRY_RUN=false` with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` (test keys are fine). |
+| Inbound Razorpay webhooks | Not available | No webhook is registered and no webhook secret is set, so real `payment.failed` events never arrive; the 15-minute reconciliation job finds no credentials and exits cleanly | Register `https://<your-backend>/api/webhooks/razorpay` in the Razorpay dashboard, select the `payment.failed`, `payment.captured`, `subscription.charged`, and `payment_link.paid` events, and set `RAZORPAY_WEBHOOK_SECRET` to the same secret. |
+| Operator login and multi-tenant isolation | Not available | The dashboard uses a single shared API key that is bundled into the public frontend, so anyone who opens browser developer tools can read it; there is no per-user authentication and all data belongs to one merchant namespace | For real use, add operator authentication and keep the API key server-side only. Turn Demo Mode off (leave `DEMO_ENABLED` unset in the prod profile). |
+
+### Run Your Own Copy
+
+To deploy or configure your own full production instance, follow [7. Environment Variables & Configuration](#7-environment-variables--configuration) and the [8. Quickstart Guide](#8-quickstart-guide). The live demo runs with the frontend on Vercel with root directory `frontend` and `VITE_API_BASE_URL` ending in `/api`, the backend on Render using the Dockerfile at the repository root with `SPRING_PROFILES_ACTIVE=prod`, and a Supabase PostgreSQL database through the session pooler. Set `CORS_ALLOWED_ORIGINS` and `APP_URL` to your frontend URL, and make sure `VITE_API_KEY` equals the backend `API_KEY`.
+
 ---
 
 ## 1. The Problem
