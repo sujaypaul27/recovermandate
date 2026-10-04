@@ -46,6 +46,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
+        if ("/api/health".equals(path) && "GET".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // Skip auth for webhook endpoint, public customer checkout endpoints, and CORS preflight requests
         if (path.startsWith("/api/webhooks/razorpay") || path.startsWith("/api/checkout/") || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);

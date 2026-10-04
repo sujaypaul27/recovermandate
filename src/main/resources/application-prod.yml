@@ -1,0 +1,3 @@
+recovermandate:
+  demo:
+    enabled: ${DEMO_ENABLED:false}

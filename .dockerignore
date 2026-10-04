@@ -1,0 +1,10 @@
+.git
+.idea
+frontend
+docs
+target
+node_modules
+*.md
+*.pptx
+.env
+.env.*

@@ -10,6 +10,7 @@ import com.recovermandate.repository.RecoveryActionRepository;
 import com.recovermandate.service.RecoveryActionService;
 import com.recovermandate.service.WebhookService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +25,7 @@ import java.util.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/demo")
+@ConditionalOnProperty(name = "recovermandate.demo.enabled", havingValue = "true", matchIfMissing = true)
 public class DemoController {
 
     private final WebhookService webhookService;

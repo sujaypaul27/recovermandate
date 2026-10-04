@@ -43,7 +43,7 @@ server:
 logging:
   level:
     root: INFO
-    com.recovermandate: DEBUG
+    com.recovermandate: ${LOG_LEVEL:INFO}
 razorpay:
   dry-run: ${RAZORPAY_DRY_RUN:false}
   webhook:
@@ -62,6 +62,8 @@ gemini:
     key: ${GEMINI_API_KEY:}
 recovermandate:
   app-url: ${APP_URL:http://localhost:5173}
+  demo:
+    enabled: ${DEMO_ENABLED:true}
   security:
     api-key: ${API_KEY:default-dev-key}
   cors:
