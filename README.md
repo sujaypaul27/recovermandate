@@ -2,7 +2,7 @@
 
 > **Autonomous AI-powered recovery platform for failed recurring payments and subscriptions on Indian banking rails.**
 
-## Live Demo
+## Live Demo ( It might take some time to load backend from Render on live demo)
 
 A live evaluation deployment of RecoverMandate is accessible at [https://recovermandate.vercel.app](https://recovermandate.vercel.app). It runs as a self-contained sandbox on free-tier hosting (frontend on Vercel, backend Docker service on Render, and PostgreSQL on Supabase) with Demo Mode on, so some production integrations are simulated.
 
