@@ -46,7 +46,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        if ("/api/health".equals(path) && "GET".equalsIgnoreCase(request.getMethod())) {
+        if (("/api/health".equals(path) || "/health".equals(path)) && "GET".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }

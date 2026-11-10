@@ -67,7 +67,7 @@ recovermandate:
   security:
     api-key: ${API_KEY:default-dev-key}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://recovermandate.vercel.app}
   mail:
     enabled: ${MAIL_ENABLED:true}
     from-email: ${MAIL_FROM:billing@recovermandate.io}

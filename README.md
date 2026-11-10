@@ -1,5 +1,8 @@
 # RecoverMandate
 
+> [!NOTE]
+> **Live Demo:** The backend runs on Render's free tier, so the first load may take up to a minute while the server wakes up, and `/health` is used for uptime monitoring.
+
 > **Autonomous AI-powered recovery platform for failed recurring payments and subscriptions on Indian banking rails.**
 
 ## Live Demo ( It might take some time to load backend from Render on live demo)

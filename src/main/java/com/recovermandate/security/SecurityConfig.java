@@ -13,6 +13,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -29,7 +30,7 @@ public class SecurityConfig {
     private final ApiKeyAuthFilter apiKeyAuthFilter;
     private final RateLimitFilter rateLimitFilter;
 
-    @Value("${recovermandate.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    @Value("${recovermandate.cors.allowed-origins:http://localhost:5173,http://localhost:3000,https://recovermandate.vercel.app}")
     private String[] allowedOrigins;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter, RateLimitFilter rateLimitFilter) {
@@ -44,6 +45,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/health").permitAll()
                 .anyRequest().permitAll()
             )
             .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
@@ -55,12 +57,23 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins));
+        List<String> origins = new ArrayList<>(Arrays.asList(allowedOrigins));
+        if (!origins.contains("https://recovermandate.vercel.app")) {
+            origins.add("https://recovermandate.vercel.app");
+        }
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedOriginPatterns(List.of("https://*.vercel.app", "http://localhost:*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+
+        CorsConfiguration healthConfiguration = new CorsConfiguration();
+        healthConfiguration.applyPermitDefaultValues();
+        healthConfiguration.setAllowedMethods(Arrays.asList("GET", "OPTIONS"));
+        healthConfiguration.setAllowedOriginPatterns(List.of("*"));
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/health", healthConfiguration);
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }

@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+export const VITE_API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, "") || "http://localhost:8080";
+const cleanApiUrl = VITE_API_URL.replace(/\/+$/, "");
+export const API_BASE_URL = cleanApiUrl.endsWith("/api") ? cleanApiUrl : `${cleanApiUrl}/api`;
 export const API_KEY = import.meta.env.VITE_API_KEY || "default-dev-key";
 
 const getHeaders = (additionalHeaders: Record<string, string> = {}) => ({
