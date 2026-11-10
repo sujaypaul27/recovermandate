@@ -16,6 +16,8 @@ import {
   Keyboard,
   XCircle,
   Download,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { API_BASE_URL, API_KEY } from "./lib/api";
@@ -41,6 +43,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [checkoutLinkId, setCheckoutLinkId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // SSE Live Notification States
   const [hasNewFailedMandate, setHasNewFailedMandate] = useState(false);
@@ -268,8 +271,167 @@ export default function App() {
 
   return (
     <>
-      <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#02042B] font-sans antialiased text-slate-900 dark:text-slate-100">
-        {/* Global Command Palette */}
+      <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-slate-50 dark:bg-[#02042B] font-sans antialiased text-slate-900 dark:text-slate-100">
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#08182D]/90 backdrop-blur-xl shrink-0 z-30">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-md shadow-blue-500/25">
+              <RazorpayMark className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight leading-tight">
+                RecoverMandate
+              </h1>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                Payment Recovery Engine
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4 text-[#3395FF]" />
+            </button>
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors relative"
+              aria-label="Toggle Navigation Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {(hasNewFailedMandate || pendingDraftCount > 0) && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="lg:hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40"
+              />
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 250 }}
+                className="lg:hidden fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white dark:bg-[#08182D] z-50 p-4 flex flex-col border-r border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto"
+              >
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
+                      <RazorpayMark className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">RecoverMandate</span>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="pt-3 pb-2">
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsCommandPaletteOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Search className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Search or jump to...</span>
+                    </div>
+                    <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-[10px] font-mono">
+                      {isMac ? "⌘K" : "Ctrl+K"}
+                    </kbd>
+                  </button>
+                </div>
+
+                <nav className="flex-1 py-3 space-y-1">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          handleTabChange(item.id);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          isActive
+                            ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge != null && (
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                              isActive ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-100 dark:bg-slate-800/50">
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">RecoverMandate AI</span>
+                    <button
+                      onClick={() => setIsRecoverMandateEnabled(!isRecoverMandateEnabled)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                        isRecoverMandateEnabled ? "bg-blue-600" : "bg-slate-400 dark:bg-slate-600"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          isRecoverMandateEnabled ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <a
+                    href="/RecoverMandate_Pitch_Deck.pptx"
+                    download="RecoverMandate_Pitch_Deck.pptx"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-600/10 text-xs font-semibold text-blue-600 dark:text-blue-400 border border-blue-500/30"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Pitch Deck (.pptx)</span>
+                  </a>
+
+                  <SystemHealthBanner />
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         <CommandPalette
           isOpen={isCommandPaletteOpen}
           onClose={() => setIsCommandPaletteOpen(false)}
@@ -296,7 +458,7 @@ export default function App() {
         />
 
         {/* Sidebar Navigation */}
-        <aside className="app-sidebar hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#08182D]/80 backdrop-blur-xl shrink-0 z-20">
+        <aside className="app-sidebar hidden lg:flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#08182D]/80 backdrop-blur-xl shrink-0 z-20">
           <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
@@ -383,10 +545,9 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="app-main">
-          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
-            {/* Top Bar (Theme Toggle, Settings & RecoverMandate Switch) */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+          <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-24 lg:pb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                   className="p-2 rounded-xl glass-card text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -516,6 +677,38 @@ export default function App() {
             </ErrorBoundary>
           </div>
         </main>
+
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-2 py-1.5 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#08182D]/95 backdrop-blur-xl shadow-lg">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  handleTabChange(item.id);
+                  const mainEl = document.querySelector(".app-main");
+                  if (mainEl) mainEl.scrollTop = 0;
+                }}
+                className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative ${
+                  isActive
+                    ? "text-blue-600 dark:text-blue-400 font-bold"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <div className="relative">
+                  <Icon className={`w-5 h-5 ${isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-400"}`} />
+                  {item.badge != null && (
+                    <span className="absolute -top-1 -right-2 px-1 py-0.2 min-w-3.5 h-3.5 text-[9px] font-bold rounded-full bg-amber-500 text-white flex items-center justify-center">
+                      {item.badge === "dot" ? "•" : item.badge}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] mt-0.5 tracking-tight">{item.label.split(" ")[0]}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
       <Toaster />
     </>

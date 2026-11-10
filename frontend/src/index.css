@@ -331,14 +331,16 @@
   z-index: 10;
 }
 
-.app-sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid rgba(148, 163, 184, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(40px);
-  display: flex;
-  flex-direction: column;
+@media (min-width: 1024px) {
+  .app-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(148, 163, 184, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(40px);
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 .app-main {
@@ -350,17 +352,11 @@
 }
 
 @media (max-width: 1024px) {
-  .app-layout { flex-direction: column; }
-  .app-sidebar { 
-    width: 100%; 
-    height: 72px; 
-    border-right: none; 
-    border-bottom: 1px solid rgba(148, 163, 184, 0.1); 
-    z-index: 50;
-    position: sticky;
-    top: 0;
+  .app-main {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
-  .app-main { height: auto; overflow: visible; }
 }
 
 /* ===== Sparkline Animation ===== */
